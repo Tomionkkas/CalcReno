@@ -5,11 +5,12 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import CustomToast from "./components/CustomToast";
+import { useToast } from "./hooks/useToast";
 import { useRouter } from "expo-router";
 import { ArrowLeft, Save, Calendar } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,6 +20,7 @@ type ProjectStatus = "W trakcie" | "Planowany" | "Zakończony" | "Wstrzymany";
 
 export default function AddProjectScreen() {
   const router = useRouter();
+  const { toastConfig, isVisible, showError, showSuccess, hideToast } = useToast();
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -37,17 +39,17 @@ export default function AddProjectScreen() {
 
   const handleSave = async () => {
     if (!formData.name.trim()) {
-      Alert.alert("Błąd", "Nazwa projektu jest wymagana");
+      showError("Błąd", "Nazwa projektu jest wymagana");
       return;
     }
 
     if (!formData.endDate) {
-      Alert.alert("Błąd", "Data zakończenia jest wymagana");
+      showError("Błąd", "Data zakończenia jest wymagana");
       return;
     }
 
     if (new Date(formData.startDate) >= new Date(formData.endDate)) {
-      Alert.alert(
+      showError(
         "Błąd",
         "Data zakończenia musi być późniejsza niż data rozpoczęcia",
       );
@@ -70,15 +72,13 @@ export default function AddProjectScreen() {
 
       await StorageService.addProject(newProject);
 
-      Alert.alert("Sukces", "Projekt został utworzony", [
-        {
-          text: "OK",
-          onPress: () => router.replace("/"),
-        },
-      ]);
+      showSuccess("Sukces", "Projekt został utworzony");
+      setTimeout(() => {
+        router.replace("/");
+      }, 1500);
     } catch (error) {
       console.error("Error saving project:", error);
-      Alert.alert("Błąd", "Nie udało się zapisać projektu");
+      showError("Błąd", "Nie udało się zapisać projektu");
     } finally {
       setSaving(false);
     }
@@ -371,6 +371,18 @@ export default function AddProjectScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Custom Toast */}
+      {toastConfig && (
+        <CustomToast
+          visible={isVisible}
+          type={toastConfig.type}
+          title={toastConfig.title}
+          message={toastConfig.message}
+          onClose={hideToast}
+          duration={toastConfig.duration}
+        />
+      )}
     </SafeAreaView>
   );
 }

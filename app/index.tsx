@@ -9,14 +9,17 @@ import {
   ActivityIndicator,
   RefreshControl,
   Modal,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
+  Image,
+  Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Plus, Search, Filter, SortDesc } from "lucide-react-native";
+import CustomToast from "./components/CustomToast";
+import { useToast } from "./hooks/useToast";
+import { Plus, Search, Filter, SortDesc, LogOut, User } from "lucide-react-native";
 import ProjectCard from "./components/ProjectCard";
 import { useRouter, useFocusEffect } from "expo-router";
 import {
@@ -24,10 +27,14 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { StorageService, Project } from "./utils/storage";
+import { useAuth } from "./hooks/useAuth";
+import ConfirmDialog from "./components/ConfirmDialog";
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user, signOut, signOutGuest, isGuest } = useAuth();
+  const { toastConfig, isVisible, showError, showSuccess, hideToast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +48,7 @@ export default function HomeScreen() {
   const [newProjectStatus, setNewProjectStatus] = useState("Planowany");
   const [newProjectStartDate, setNewProjectStartDate] = useState("");
   const [newProjectEndDate, setNewProjectEndDate] = useState("");
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const statusFilters = [
     "Wszystkie",
@@ -60,7 +68,7 @@ export default function HomeScreen() {
   const loadProjects = async () => {
     try {
       setLoading(true);
-      const projectsData = await StorageService.getProjects();
+      const projectsData = await StorageService.getProjects(isGuest, user?.id);
       setProjects(projectsData);
     } catch (error) {
       console.error("Error loading projects:", error);
@@ -105,7 +113,7 @@ export default function HomeScreen() {
 
   const handleSaveProject = async () => {
     if (!newProjectName.trim()) {
-      Alert.alert("Błąd", "Nazwa projektu jest wymagana");
+      showError("Błąd", "Nazwa projektu jest wymagana");
       return;
     }
 
@@ -121,7 +129,7 @@ export default function HomeScreen() {
     };
 
     try {
-      await StorageService.addProject(newProject);
+      await StorageService.addProject(newProject, isGuest, user?.id);
       setProjects([...projects, newProject]);
       setShowAddModal(false);
       setNewProjectName("");
@@ -129,9 +137,9 @@ export default function HomeScreen() {
       setNewProjectStatus("Planowany");
       setNewProjectStartDate("");
       setNewProjectEndDate("");
-      Alert.alert("Sukces", "Projekt został dodany");
+      showSuccess("Sukces", "Projekt został dodany");
     } catch (error) {
-      Alert.alert("Błąd", "Nie udało się dodać projektu");
+      showError("Błąd", "Nie udało się dodać projektu");
     }
   };
 
@@ -141,7 +149,7 @@ export default function HomeScreen() {
 
   const handleDeleteProject = async (projectId: string) => {
     try {
-      await StorageService.deleteProject(projectId);
+      await StorageService.deleteProject(projectId, isGuest, user?.id);
       setProjects(projects.filter((project) => project.id !== projectId));
     } catch (error) {
       console.error("Error deleting project:", error);
@@ -153,7 +161,7 @@ export default function HomeScreen() {
       const project = projects.find((p) => p.id === projectId);
       if (project) {
         const updatedProject = { ...project, isPinned: !project.isPinned };
-        await StorageService.updateProject(updatedProject);
+        await StorageService.updateProject(updatedProject, isGuest, user?.id);
         setProjects(
           projects.map((p) => (p.id === projectId ? updatedProject : p)),
         );
@@ -173,7 +181,7 @@ export default function HomeScreen() {
     setFilterVisible(false);
   };
 
-  const applyFilter = (filter) => {
+  const applyFilter = (filter: string) => {
     setActiveFilter(filter);
     setFilterVisible(false);
   };
@@ -198,6 +206,14 @@ export default function HomeScreen() {
 
     setProjects(sortedProjects);
     setSortVisible(false);
+  };
+
+  const handleLogout = async () => {
+    if (isGuest) {
+      setShowLogoutDialog(true);
+    } else {
+      setShowLogoutDialog(true);
+    }
   };
 
   const renderEmptyState = () => (
@@ -277,34 +293,97 @@ export default function HomeScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: "#0A0B1E" }}>
       <StatusBar barStyle="light-content" backgroundColor="#0A0B1E" />
 
-      {/* Header with gradient */}
+      {/* Header with gradient and logo */}
       <LinearGradient
         colors={["#0A0B1E", "#151829"]}
-        style={{ paddingTop: 16, paddingBottom: 16, paddingHorizontal: 16 }}
+        style={{ 
+          paddingTop: 8, 
+          paddingBottom: 0, 
+          paddingHorizontal: 16,
+          height: 100,
+          justifyContent: "center",
+          alignItems: "center",
+          position: "relative"
+        }}
       >
-        <Text
+        {/* Logout button - show for both guest and logged-in users */}
+        {(user || isGuest) && (
+          <View style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            zIndex: 10,
+            alignItems: "flex-end"
+          }}>
+            {!isGuest && user?.email && (
+              <Text style={{
+                color: "#B8BCC8",
+                fontSize: 11,
+                marginBottom: 6,
+                opacity: 0.8,
+              }}>
+                {user.email}
+              </Text>
+            )}
+            {isGuest && (
+              <Text style={{
+                color: "#B8BCC8",
+                fontSize: 11,
+                marginBottom: 6,
+                opacity: 0.8,
+              }}>
+                Tryb offline
+              </Text>
+            )}
+            <TouchableOpacity
+              onPress={handleLogout}
+              style={{
+                backgroundColor: "#1E2139",
+                borderWidth: 1,
+                borderColor: "#2A2D4A",
+                borderRadius: 8,
+                padding: 8,
+                flexDirection: "row",
+                alignItems: "center",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              <LogOut size={14} color="#B8BCC8" style={{ marginRight: 6 }} />
+              <Text style={{
+                color: "#B8BCC8",
+                fontSize: 11,
+                fontWeight: "500",
+              }}>
+                {isGuest ? "Wyjdź" : "Wyloguj"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        <Image
+          source={require("../assets/images/calcreno-logo.png")}
           style={{
-            color: "white",
-            fontSize: 28,
-            fontWeight: "bold",
-            marginBottom: 8,
+            width: 500,
+            height: 130,
+            marginTop: 0
           }}
-        >
-          CalcReno
-        </Text>
-        <Text style={{ color: "#B8BCC8", fontSize: 16 }}>
-          Kalkulator Materiałów Remontowych
-        </Text>
+          resizeMode="contain"
+        />
       </LinearGradient>
 
       {/* Search and filter bar */}
       <View
         style={{
           paddingHorizontal: 16,
-          paddingVertical: 12,
+          paddingVertical: 8,
           flexDirection: "row",
           alignItems: "center",
           backgroundColor: "#151829",
+          marginTop: -8,
         }}
       >
         <View
@@ -696,6 +775,40 @@ export default function HomeScreen() {
           </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Custom Toast */}
+      {toastConfig && (
+        <CustomToast
+          visible={isVisible}
+          type={toastConfig.type}
+          title={toastConfig.title}
+          message={toastConfig.message}
+          onClose={hideToast}
+          duration={toastConfig.duration}
+        />
+      )}
+
+      {/* Logout Confirmation Dialog */}
+      <ConfirmDialog
+        visible={showLogoutDialog}
+        title={isGuest ? "Wyjdź z trybu offline" : "Wyloguj się"}
+        message={isGuest 
+          ? "Czy na pewno chcesz wyjść z trybu offline? Będziesz mógł się zalogować lub utworzyć konto."
+          : "Czy na pewno chcesz się wylogować?"
+        }
+        confirmText={isGuest ? "Wyjdź" : "Wyloguj"}
+        cancelText="Anuluj"
+        confirmColor="#EF4444"
+        onConfirm={async () => {
+          setShowLogoutDialog(false);
+          if (isGuest) {
+            signOutGuest();
+          } else {
+            await signOut();
+          }
+        }}
+        onCancel={() => setShowLogoutDialog(false)}
+      />
     </SafeAreaView>
   );
 }

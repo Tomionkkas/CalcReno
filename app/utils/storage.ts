@@ -25,6 +25,7 @@ export interface Room {
   };
   elements: RoomElement[];
   materials?: MaterialCalculation;
+  corner?: "top-left" | "top-right" | "bottom-left" | "bottom-right"; // For L-shape orientation
 }
 
 export interface RoomElement {
@@ -44,12 +45,21 @@ export interface MaterialCalculation {
   roomPerimeter: number;
 }
 
-const PROJECTS_KEY = "calcreno_projects";
+const GUEST_PROJECTS_KEY = "calcreno_guest_projects";
+const USER_PROJECTS_KEY = "calcreno_user_projects";
 
 export const StorageService = {
-  async getProjects(): Promise<Project[]> {
+  getStorageKey(isGuest: boolean = false, userId?: string): string {
+    if (isGuest) {
+      return GUEST_PROJECTS_KEY;
+    }
+    return userId ? `${USER_PROJECTS_KEY}_${userId}` : USER_PROJECTS_KEY;
+  },
+
+  async getProjects(isGuest: boolean = false, userId?: string): Promise<Project[]> {
     try {
-      const data = await AsyncStorage.getItem(PROJECTS_KEY);
+      const key = this.getStorageKey(isGuest, userId);
+      const data = await AsyncStorage.getItem(key);
       return data ? JSON.parse(data) : [];
     } catch (error) {
       console.error("Error loading projects:", error);
@@ -57,38 +67,47 @@ export const StorageService = {
     }
   },
 
-  async saveProjects(projects: Project[]): Promise<void> {
+  async saveProjects(projects: Project[], isGuest: boolean = false, userId?: string): Promise<void> {
     try {
-      await AsyncStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+      const key = this.getStorageKey(isGuest, userId);
+      await AsyncStorage.setItem(key, JSON.stringify(projects));
     } catch (error) {
       console.error("Error saving projects:", error);
       throw error;
     }
   },
 
-  async addProject(project: Project): Promise<void> {
-    const projects = await this.getProjects();
+  async addProject(project: Project, isGuest: boolean = false, userId?: string): Promise<void> {
+    const projects = await this.getProjects(isGuest, userId);
     projects.push(project);
-    await this.saveProjects(projects);
+    await this.saveProjects(projects, isGuest, userId);
   },
 
-  async updateProject(updatedProject: Project): Promise<void> {
-    const projects = await this.getProjects();
+  async updateProject(updatedProject: Project, isGuest: boolean = false, userId?: string): Promise<void> {
+    const projects = await this.getProjects(isGuest, userId);
     const index = projects.findIndex((p) => p.id === updatedProject.id);
     if (index !== -1) {
       projects[index] = updatedProject;
-      await this.saveProjects(projects);
+      await this.saveProjects(projects, isGuest, userId);
     }
   },
 
-  async deleteProject(projectId: string): Promise<void> {
-    const projects = await this.getProjects();
+  async deleteProject(projectId: string, isGuest: boolean = false, userId?: string): Promise<void> {
+    const projects = await this.getProjects(isGuest, userId);
     const filtered = projects.filter((p) => p.id !== projectId);
-    await this.saveProjects(filtered);
+    await this.saveProjects(filtered, isGuest, userId);
   },
 
-  async getProject(projectId: string): Promise<Project | null> {
-    const projects = await this.getProjects();
+  async getProject(projectId: string, isGuest: boolean = false, userId?: string): Promise<Project | null> {
+    const projects = await this.getProjects(isGuest, userId);
     return projects.find((p) => p.id === projectId) || null;
+  },
+
+  async clearGuestData(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(GUEST_PROJECTS_KEY);
+    } catch (error) {
+      console.error("Error clearing guest data:", error);
+    }
   },
 };

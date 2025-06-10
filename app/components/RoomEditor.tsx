@@ -1,18 +1,19 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { PanGestureHandler } from "react-native-gesture-handler";
+import CustomToast from "./CustomToast";
+import { useToast } from "../hooks/useToast";
+import { PanGestureHandler, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedGestureHandler,
   useAnimatedStyle,
@@ -26,6 +27,7 @@ import {
   CornerDownRight,
 } from "lucide-react-native";
 import { Modal } from "react-native";
+import { getWallsForShape, validateElementOnWall, WallInfo } from "../utils/shapeCalculations";
 
 type RoomShape = "rectangle" | "l-shape";
 type ElementType = "door" | "window";
@@ -45,16 +47,19 @@ interface RoomEditorProps {
     dimensions: any;
     elements: Element[];
     name?: string;
+    corner?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
   }) => void;
   initialData?: {
     shape: RoomShape;
     dimensions: any;
     elements: Element[];
     name?: string;
+    corner?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
   };
 }
 
 const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
+  const { toastConfig, isVisible, showError, hideToast } = useToast();
   const [roomName, setRoomName] = useState(initialData?.name || "");
   const [roomShape, setRoomShape] = useState<RoomShape>(
     initialData?.shape || "rectangle",
@@ -71,7 +76,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
   );
   const [lShapeCorner, setLShapeCorner] = useState<
     "top-left" | "top-right" | "bottom-left" | "bottom-right"
-  >("top-right");
+  >(initialData?.corner || "top-right");
   const [elements, setElements] = useState<Element[]>(
     initialData?.elements || [],
   );
@@ -81,6 +86,12 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
   const [elementWidth, setElementWidth] = useState("");
   const [elementHeight, setElementHeight] = useState("");
   const [selectedWall, setSelectedWall] = useState<number>(0);
+  const [elementPosition, setElementPosition] = useState<number>(50); // Position on wall (0-100%)
+
+  // Calculate available walls based on room shape
+  const availableWalls = useMemo(() => {
+    return getWallsForShape(roomShape, dimensions, lShapeCorner);
+  }, [roomShape, dimensions, lShapeCorner]);
 
   // Animation values for draggable elements
   const dragX = useSharedValue(0);
@@ -89,7 +100,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
   const handleDimensionChange = (key: string, value: string) => {
     const numValue = parseFloat(value) || 0;
     // Convert meters to cm for internal storage
-    setDimensions((prev) => ({ ...prev, [key]: numValue * 100 }));
+    setDimensions((prev: any) => ({ ...prev, [key]: numValue * 100 }));
   };
 
   const addElement = (type: ElementType) => {
@@ -97,6 +108,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
     setElementWidth(type === "door" ? "0.9" : "1.0");
     setElementHeight(type === "door" ? "2.0" : "1.2");
     setSelectedWall(0);
+    setElementPosition(50);
     setShowElementModal(true);
   };
 
@@ -105,8 +117,23 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
     const height = parseFloat(elementHeight);
 
     if (!width || !height || width <= 0 || height <= 0) {
-      Alert.alert("Błąd", "Wprowadź prawidłowe wymiary");
+      showError("Błąd", "Wprowadź prawidłowe wymiary");
       return;
+    }
+
+    // Validate element fits on selected wall
+    const selectedWallInfo = availableWalls[selectedWall];
+    if (selectedWallInfo) {
+      const validation = validateElementOnWall(
+        selectedWallInfo,
+        width * 100, // Convert to cm
+        elementPosition
+      );
+      
+      if (!validation.valid) {
+        showError("Błąd pozycjonowania", validation.message || "Element nie mieści się na ścianie");
+        return;
+      }
     }
 
     const newElement: Element = {
@@ -114,7 +141,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
       type: elementType,
       width: width * 100, // Convert to cm for storage
       height: height * 100,
-      position: 50, // Default position in the middle of the wall
+      position: elementPosition,
       wall: selectedWall,
     };
 
@@ -122,6 +149,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
     setShowElementModal(false);
     setElementWidth("");
     setElementHeight("");
+    setElementPosition(50);
   };
 
   const removeElement = (id: string) => {
@@ -135,7 +163,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
       dimensions.length <= 0 ||
       dimensions.height <= 0
     ) {
-      Alert.alert("Błąd", "Wszystkie wymiary muszą być większe od zera");
+      showError("Błąd", "Wszystkie wymiary muszą być większe od zera");
       return;
     }
 
@@ -143,7 +171,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
       roomShape === "l-shape" &&
       (dimensions.width2 <= 0 || dimensions.length2 <= 0)
     ) {
-      Alert.alert("Błąd", "Wymiary drugiej części muszą być większe od zera");
+      showError("Błąd", "Wymiary drugiej części muszą być większe od zera");
       return;
     }
 
@@ -153,6 +181,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
         dimensions,
         elements,
         name: roomName,
+        corner: roomShape === "l-shape" ? lShapeCorner : undefined,
       });
     }
   };
@@ -222,7 +251,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
     if (roomShape === "rectangle") {
       return (
         <View style={{ marginTop: 16, position: "relative" }}>
-          <View
+          <GestureHandlerRootView
             style={{
               borderWidth: 2,
               borderColor: "#8B5CF6",
@@ -232,7 +261,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
             }}
           >
             {elements.map((element) => renderElement(element))}
-          </View>
+          </GestureHandlerRootView>
           <View
             style={{
               position: "absolute",
@@ -465,21 +494,30 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#0A0B1E" }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={{ flex: 1 }}>
-          <LinearGradient
-            colors={["#0A0B1E", "#151829"]}
-            style={{ flex: 1, padding: 16, borderRadius: 8 }}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View style={{ flex: 1, backgroundColor: "#0A0B1E" }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+      >
+        <LinearGradient
+          colors={["#0A0B1E", "#151829"]}
+          style={{ flex: 1 }}
+        >
+          <ScrollView
+            style={{ flex: 1 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+            contentContainerStyle={{ 
+              paddingBottom: 120,
+              padding: 16
+            }}
+            nestedScrollEnabled={true}
+            scrollEnabled={true}
+            bounces={true}
+            alwaysBounceVertical={true}
           >
-            <ScrollView
-              style={{ flex: 1 }}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 100 }}
-            >
               <Text
                 style={{
                   fontSize: 24,
@@ -814,12 +852,17 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
                         ) : (
                           <Square size={20} color="#4DABF7" />
                         )}
-                        <Text style={{ color: "white", marginLeft: 8 }}>
-                          {element.type === "door" ? "Drzwi" : "Okno"} (
-                          {(element.width / 100).toFixed(2)}x
-                          {(element.height / 100).toFixed(2)} m) - Ściana{" "}
-                          {element.wall + 1}
-                        </Text>
+                        <View>
+                          <Text style={{ color: "white", marginLeft: 8 }}>
+                            {element.type === "door" ? "Drzwi" : "Okno"} (
+                            {(element.width / 100).toFixed(2)}x
+                            {(element.height / 100).toFixed(2)} m)
+                          </Text>
+                          <Text style={{ color: "#9CA3AF", marginLeft: 8, fontSize: 12 }}>
+                            {availableWalls[element.wall]?.name || `Ściana ${element.wall + 1}`} - 
+                            pozycja {element.position}%
+                          </Text>
+                        </View>
                       </View>
                       <TouchableOpacity
                         onPress={() => removeElement(element.id)}
@@ -854,8 +897,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
               </TouchableOpacity>
             </ScrollView>
           </LinearGradient>
-        </View>
-      </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
 
       {/* Element Modal */}
       <Modal
@@ -898,11 +940,11 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
               <Text style={{ color: "white", marginBottom: 8, fontSize: 16 }}>
                 Wybierz ścianę
               </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                {["Ściana 1", "Ściana 2", "Ściana 3", "Ściana 4"].map(
-                  (wall, index) => (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={{ flexDirection: "row" }}>
+                  {availableWalls.map((wall, index) => (
                     <TouchableOpacity
-                      key={index}
+                      key={wall.id}
                       onPress={() => setSelectedWall(index)}
                       style={{
                         backgroundColor:
@@ -911,14 +953,117 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
                         paddingVertical: 8,
                         borderRadius: 8,
                         marginRight: 8,
-                        marginBottom: 8,
+                        minWidth: 120,
                       }}
                     >
-                      <Text style={{ color: "white", fontSize: 14 }}>
-                        {wall}
+                      <Text style={{ color: "white", fontSize: 14, textAlign: "center" }}>
+                        {wall.name}
+                      </Text>
+                      <Text style={{ color: "#9CA3AF", fontSize: 12, textAlign: "center", marginTop: 2 }}>
+                        {(wall.length / 100).toFixed(2)}m
                       </Text>
                     </TouchableOpacity>
-                  ),
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Position on Wall */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ color: "white", marginBottom: 8, fontSize: 16 }}>
+                Pozycja na ścianie: {elementPosition}%
+              </Text>
+              <View style={{ backgroundColor: "#374151", borderRadius: 8, padding: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text style={{ color: "#9CA3AF", fontSize: 12, width: 30 }}>0%</Text>
+                  <View style={{ flex: 1, height: 40, justifyContent: "center" }}>
+                    {/* Custom Slider Implementation */}
+                    <View style={{ height: 4, backgroundColor: "#4B5563", borderRadius: 2 }}>
+                      <View 
+                        style={{ 
+                          height: 4, 
+                          backgroundColor: "#6C63FF", 
+                          borderRadius: 2,
+                          width: `${elementPosition}%`
+                        }} 
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={{
+                        position: "absolute",
+                        left: `${elementPosition}%`,
+                        transform: [{ translateX: -12 }],
+                        width: 24,
+                        height: 24,
+                        backgroundColor: "#6C63FF",
+                        borderRadius: 12,
+                        borderWidth: 2,
+                        borderColor: "white",
+                      }}
+                      onPress={() => {
+                        // Simple position adjustment - you could add gesture handlers here
+                      }}
+                    />
+                  </View>
+                  <Text style={{ color: "#9CA3AF", fontSize: 12, width: 40, textAlign: "right" }}>100%</Text>
+                </View>
+                <View style={{ flexDirection: "row", marginTop: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => setElementPosition(Math.max(0, elementPosition - 10))}
+                    style={{
+                      backgroundColor: "#4B5563",
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 6,
+                      marginRight: 8,
+                    }}
+                  >
+                    <Text style={{ color: "white", fontSize: 12 }}>-10%</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setElementPosition(50)}
+                    style={{
+                      backgroundColor: "#6C63FF",
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 6,
+                      marginRight: 8,
+                    }}
+                  >
+                    <Text style={{ color: "white", fontSize: 12 }}>Środek</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setElementPosition(Math.min(100, elementPosition + 10))}
+                    style={{
+                      backgroundColor: "#4B5563",
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Text style={{ color: "white", fontSize: 12 }}>+10%</Text>
+                  </TouchableOpacity>
+                </View>
+                {/* Validation Display */}
+                {availableWalls[selectedWall] && elementWidth && (
+                  <View style={{ marginTop: 8 }}>
+                    {(() => {
+                      const validation = validateElementOnWall(
+                        availableWalls[selectedWall],
+                        parseFloat(elementWidth) * 100,
+                        elementPosition
+                      );
+                      return (
+                        <Text style={{ 
+                          color: validation.valid ? "#10B981" : "#EF4444", 
+                          fontSize: 12,
+                          textAlign: "center"
+                        }}>
+                          {validation.valid ? "✓ Element mieści się na ścianie" : validation.message}
+                        </Text>
+                      );
+                    })()}
+                  </View>
                 )}
               </View>
             </View>
@@ -1014,7 +1159,20 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
           </LinearGradient>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+
+      {/* Custom Toast */}
+      {toastConfig && (
+        <CustomToast
+          visible={isVisible}
+          type={toastConfig.type}
+          title={toastConfig.title}
+          message={toastConfig.message}
+          onClose={hideToast}
+          duration={toastConfig.duration}
+        />
+      )}
+    </View>
+    </GestureHandlerRootView>
   );
 };
 

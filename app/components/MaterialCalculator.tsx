@@ -165,7 +165,66 @@ const MaterialCalculator = ({
     addMaterial("cable25", Math.ceil(socketsCountNum * 5)); // 5m na gniazdko
     addMaterial("junctionBox", Math.ceil(socketsCountNum + switchesCountNum));
 
-    return { materials, totalCost, floorArea, netWallArea, roomPerimeter };
+    return { 
+      materials, 
+      totalCost, 
+      floorArea, 
+      netWallArea, 
+      roomPerimeter,
+      costs,
+      materialNames: {
+        floorPanels: "Panele podłogowe",
+        underlayment: "Podkład pod panele",
+        paint: "Farba",
+        drywall: "Płyty GK ścienne",
+        cwProfiles: "Profile CW",
+        uwProfiles: "Profile UW",
+        mineralWool: "Wełna mineralna",
+        tnScrews: "Wkręty TN do GK",
+        wallPlaster: "Gips szpachlowy ścienny",
+        finishingPlaster: "Gładź szpachlowa",
+        osb: "Płyta OSB",
+        osbScrews: "Wkręty OSB",
+        baseboards: "Listwy przypodłogowe",
+        baseboardEnds: "Narożniki/zakończenia listew",
+        cdProfiles: "Profile CD 60",
+        udProfiles: "Profile UD 27",
+        hangers: "Wieszaki ES",
+        gypsum: "Płyty GK sufitowe",
+        plaster: "Gips szpachlowy sufitowy",
+        sockets: "Gniazdka",
+        switches: "Włączniki",
+        cable15: "Przewód YDY 3x1.5",
+        cable25: "Przewód YDY 3x2.5",
+        junctionBox: "Puszki podtynkowe",
+      },
+      materialUnits: {
+        floorPanels: "m²",
+        underlayment: "m²",
+        paint: "l",
+        drywall: "szt",
+        cwProfiles: "szt",
+        uwProfiles: "szt",
+        mineralWool: "paczek",
+        tnScrews: "opak",
+        wallPlaster: "worków",
+        finishingPlaster: "worków",
+        osb: "szt",
+        osbScrews: "opak",
+        baseboards: "szt",
+        baseboardEnds: "szt",
+        cdProfiles: "szt",
+        udProfiles: "szt",
+        hangers: "szt",
+        gypsum: "szt",
+        plaster: "worków",
+        sockets: "szt",
+        switches: "szt",
+        cable15: "m",
+        cable25: "m",
+        junctionBox: "szt",
+      }
+    };
   };
 
   const result = calculateRequiredMaterials();
