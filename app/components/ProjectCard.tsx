@@ -2,26 +2,18 @@ import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Pin, Edit2, Trash2 } from "lucide-react-native";
+import ProjectExportButton from "./ProjectExportButton";
+import type { Project } from "../utils/storage";
 
 interface ProjectCardProps {
-  id?: string;
-  name?: string;
-  status?: "W trakcie" | "Zakończone" | "Wstrzymane" | "Planowane";
-  startDate?: string;
-  endDate?: string;
-  isPinned?: boolean;
+  project: Project;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onPin?: (id: string, isPinned: boolean) => void;
 }
 
 const ProjectCard = ({
-  id = "1",
-  name = "Remont łazienki",
-  status = "W trakcie",
-  startDate = "01.05.2023",
-  endDate = "15.06.2023",
-  isPinned = false,
+  project,
   onEdit = () => {},
   onDelete = () => {},
   onPin = () => {},
@@ -29,12 +21,12 @@ const ProjectCard = ({
   // Status colors mapping
   const statusColors = {
     "W trakcie": "#F59E0B", // amber
-    Zakończone: "#10B981", // green
-    Wstrzymane: "#EF4444", // red
-    Planowane: "#4DABF7", // blue
+    Zakończony: "#10B981", // green
+    Wstrzymany: "#EF4444", // red
+    Planowany: "#4DABF7", // blue
   };
 
-  const statusColor = statusColors[status] || "#6B7280";
+  const statusColor = statusColors[project.status as keyof typeof statusColors] || "#6B7280";
 
   return (
     <LinearGradient
@@ -80,11 +72,11 @@ const ProjectCard = ({
                 flex: 1,
               }}
             >
-              {name}
+              {project.name}
             </Text>
           </View>
           <TouchableOpacity
-            onPress={() => onPin(id, !isPinned)}
+            onPress={() => onPin(project.id, !project.isPinned)}
             style={{
               padding: 8,
               minWidth: 44,
@@ -95,8 +87,8 @@ const ProjectCard = ({
           >
             <Pin
               size={18}
-              color={isPinned ? "#6C63FF" : "#6B7280"}
-              fill={isPinned ? "#6C63FF" : "transparent"}
+              color={project.isPinned ? "#6C63FF" : "#6B7280"}
+              fill={project.isPinned ? "#6C63FF" : "transparent"}
             />
           </TouchableOpacity>
         </View>
@@ -105,16 +97,19 @@ const ProjectCard = ({
           <Text style={{ color: "#B8BCC8", fontSize: 14, marginBottom: 4 }}>
             Status:{" "}
             <Text style={{ fontWeight: "500", color: statusColor }}>
-              {status}
+              {project.status}
             </Text>
           </Text>
           <Text style={{ color: "#B8BCC8", fontSize: 14, marginBottom: 2 }}>
-            Data rozpoczęcia: {startDate}
+            Data rozpoczęcia: {project.startDate}
           </Text>
           <Text style={{ color: "#B8BCC8", fontSize: 14 }}>
-            Data zakończenia: {endDate}
+            Data zakończenia: {project.endDate}
           </Text>
         </View>
+
+        {/* Export button */}
+        <ProjectExportButton project={project} />
 
         <View
           style={{
@@ -126,7 +121,7 @@ const ProjectCard = ({
           }}
         >
           <TouchableOpacity
-            onPress={() => onEdit(id)}
+            onPress={() => onEdit(project.id)}
             style={{
               padding: 8,
               marginRight: 8,
@@ -139,7 +134,7 @@ const ProjectCard = ({
             <Edit2 size={18} color="#4DABF7" />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => onDelete(id)}
+            onPress={() => onDelete(project.id)}
             style={{
               padding: 8,
               minWidth: 44,

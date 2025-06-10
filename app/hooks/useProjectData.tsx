@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { StorageService, Project, Room } from "../utils/storage";
 import { useAuth } from "./useAuth";
+import { EventDetectionService } from "../utils/eventDetection";
 
 export function useProjectData(id: string | undefined, showError: (title: string, message?: string) => void, showSuccess: (title: string, message?: string) => void, showConfirm?: (title: string, message: string, onConfirm: () => void) => void) {
   const [project, setProject] = useState<Project | null>(null);
@@ -95,6 +96,8 @@ export function useProjectData(id: string | undefined, showError: (title: string
   const handleSaveCalculation = async (calculation: any, selectedRoom: Room | null) => {
     if (!project || !selectedRoom) return;
 
+    const previousTotalCost = project.totalCost || 0;
+
     const updatedRooms = project.rooms.map((r) =>
       r.id === selectedRoom.id ? { ...r, materials: calculation } : r,
     );
@@ -112,6 +115,35 @@ export function useProjectData(id: string | undefined, showError: (title: string
 
     await StorageService.updateProject(updatedProject, isGuest, user?.id);
     setProject(updatedProject);
+
+    // Event detection for cross-app notifications (only for logged-in users)
+    if (!isGuest && user?.id) {
+      try {
+        // Detect budget changes
+        await EventDetectionService.detectBudgetChanges(
+          updatedProject, 
+          previousTotalCost, 
+          user.id
+        );
+
+        // Detect significant cost items
+        await EventDetectionService.detectSignificantCostItem(
+          updatedProject,
+          selectedRoom.id,
+          calculation.totalCost || 0,
+          user.id
+        );
+
+        // Detect project completion
+        await EventDetectionService.detectProjectCompletion(
+          updatedProject,
+          user.id
+        );
+      } catch (error) {
+        console.warn('Event detection failed:', error);
+        // Don't fail the save operation if event detection fails
+      }
+    }
 
     showSuccess("Sukces", "Kalkulacja została zapisana");
   };

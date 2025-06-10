@@ -26,14 +26,17 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { StorageService, Project } from "./utils/storage";
+import { StorageService, Project, generateUUID } from "./utils/storage";
 import { useAuth } from "./hooks/useAuth";
 import ConfirmDialog from "./components/ConfirmDialog";
+import NotificationCenter from "./components/NotificationCenter";
+import { DeleteConfirmationModal } from "./components/DeleteConfirmationModal";
+import { OnboardingModal } from "./components/OnboardingModal";
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, signOut, signOutGuest, isGuest } = useAuth();
+  const { user, signOut, signOutGuest, isGuest, userProfile, needsOnboarding, setNeedsOnboarding } = useAuth();
   const { toastConfig, isVisible, showError, showSuccess, hideToast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
@@ -49,6 +52,9 @@ export default function HomeScreen() {
   const [newProjectStartDate, setNewProjectStartDate] = useState("");
   const [newProjectEndDate, setNewProjectEndDate] = useState("");
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const statusFilters = [
     "Wszystkie",
@@ -70,6 +76,13 @@ export default function HomeScreen() {
       setLoading(true);
       const projectsData = await StorageService.getProjects(isGuest, user?.id);
       setProjects(projectsData);
+      
+      // Check if user needs onboarding (no projects and is logged in)
+      if (user && !isGuest && projectsData.length === 0) {
+        setNeedsOnboarding(true);
+      } else {
+        setNeedsOnboarding(false);
+      }
     } catch (error) {
       console.error("Error loading projects:", error);
     } finally {
@@ -118,7 +131,7 @@ export default function HomeScreen() {
     }
 
     const newProject = {
-      id: Date.now().toString(),
+      id: generateUUID(), // Use proper UUID instead of timestamp
       name: newProjectName,
       description: newProjectDescription,
       status: newProjectStatus as any,
@@ -137,23 +150,61 @@ export default function HomeScreen() {
       setNewProjectStatus("Planowany");
       setNewProjectStartDate("");
       setNewProjectEndDate("");
+      
+      // If this is the first project, disable onboarding
+      if (needsOnboarding) {
+        setNeedsOnboarding(false);
+      }
+      
       showSuccess("Sukces", "Projekt został dodany");
     } catch (error) {
       showError("Błąd", "Nie udało się dodać projektu");
     }
   };
 
+  const handleOnboardingCreateProject = () => {
+    setNeedsOnboarding(false);
+    handleAddProject();
+  };
+
+  const handleSkipOnboarding = () => {
+    setNeedsOnboarding(false);
+  };
+
   const handleEditProject = (projectId: string) => {
     router.push(`/project/${projectId}`);
   };
 
-  const handleDeleteProject = async (projectId: string) => {
+  const handleDeleteProject = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      setProjectToDelete({ id: projectId, name: project.name });
+      setShowDeleteModal(true);
+    }
+  };
+
+  const confirmDeleteProject = async () => {
+    if (!projectToDelete) return;
+
+    setDeleteLoading(true);
     try {
-      await StorageService.deleteProject(projectId, isGuest, user?.id);
-      setProjects(projects.filter((project) => project.id !== projectId));
+      await StorageService.deleteProject(projectToDelete.id, isGuest, user?.id);
+      setProjects(projects.filter((project) => project.id !== projectToDelete.id));
+      showSuccess("Sukces", "Projekt został usunięty");
+      setShowDeleteModal(false);
+      setProjectToDelete(null);
     } catch (error) {
       console.error("Error deleting project:", error);
+      showError("Błąd", "Nie udało się usunąć projektu");
+    } finally {
+      setDeleteLoading(false);
     }
+  };
+
+  const cancelDeleteProject = () => {
+    setShowDeleteModal(false);
+    setProjectToDelete(null);
+    setDeleteLoading(false);
   };
 
   const handleTogglePin = async (projectId: string) => {
@@ -306,7 +357,7 @@ export default function HomeScreen() {
           position: "relative"
         }}
       >
-        {/* Logout button - show for both guest and logged-in users */}
+        {/* Header right section - notifications and logout */}
         {(user || isGuest) && (
           <View style={{
             position: "absolute",
@@ -322,7 +373,9 @@ export default function HomeScreen() {
                 marginBottom: 6,
                 opacity: 0.8,
               }}>
-                {user.email}
+                {userProfile?.firstName && userProfile?.lastName 
+                  ? `${userProfile.firstName} ${userProfile.lastName}`
+                  : user.email}
               </Text>
             )}
             {isGuest && (
@@ -335,32 +388,39 @@ export default function HomeScreen() {
                 Tryb offline
               </Text>
             )}
-            <TouchableOpacity
-              onPress={handleLogout}
-              style={{
-                backgroundColor: "#1E2139",
-                borderWidth: 1,
-                borderColor: "#2A2D4A",
-                borderRadius: 8,
-                padding: 8,
-                flexDirection: "row",
-                alignItems: "center",
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 4,
-                elevation: 2,
-              }}
-            >
-              <LogOut size={14} color="#B8BCC8" style={{ marginRight: 6 }} />
-              <Text style={{
-                color: "#B8BCC8",
-                fontSize: 11,
-                fontWeight: "500",
-              }}>
-                {isGuest ? "Wyjdź" : "Wyloguj"}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {/* Notification Center */}
+              <NotificationCenter />
+              
+              {/* Logout Button */}
+              <TouchableOpacity
+                onPress={handleLogout}
+                style={{
+                  backgroundColor: "#1E2139",
+                  borderWidth: 1,
+                  borderColor: "#2A2D4A",
+                  borderRadius: 8,
+                  padding: 8,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 2,
+                  marginLeft: 8,
+                }}
+              >
+                <LogOut size={14} color="#B8BCC8" style={{ marginRight: 6 }} />
+                <Text style={{
+                  color: "#B8BCC8",
+                  fontSize: 11,
+                  fontWeight: "500",
+                }}>
+                  {isGuest ? "Wyjdź" : "Wyloguj"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
         
@@ -549,12 +609,7 @@ export default function HomeScreen() {
               activeOpacity={0.8}
             >
               <ProjectCard
-                id={item.id}
-                name={item.name}
-                status={item.status as any}
-                startDate={item.startDate}
-                endDate={item.endDate}
-                isPinned={item.isPinned}
+                project={item}
                 onEdit={() => handleEditProject(item.id)}
                 onDelete={() => handleDeleteProject(item.id)}
                 onPin={() => handleTogglePin(item.id)}
@@ -804,10 +859,30 @@ export default function HomeScreen() {
           if (isGuest) {
             signOutGuest();
           } else {
-            await signOut();
+            const { error } = await signOut();
+            if (error) {
+              showError("Błąd", "Nie udało się wylogować");
+            }
           }
         }}
         onCancel={() => setShowLogoutDialog(false)}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        visible={showDeleteModal}
+        onClose={cancelDeleteProject}
+        onConfirm={confirmDeleteProject}
+        projectName={projectToDelete?.name || ""}
+        loading={deleteLoading}
+      />
+
+      {/* Onboarding Modal */}
+      <OnboardingModal
+        visible={needsOnboarding}
+        onClose={handleSkipOnboarding}
+        onCreateProject={handleOnboardingCreateProject}
+        userName={userProfile?.firstName}
       />
     </SafeAreaView>
   );
