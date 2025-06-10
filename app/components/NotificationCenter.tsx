@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Modal, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Modal, Linking, Pressable, ScrollView, RefreshControl, Alert } from 'react-native';
 import { Bell, X, ExternalLink, Calendar, AlertTriangle, CheckCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../hooks/useAuth';
 import { EventDetectionService } from '../utils/eventDetection';
+import { supabase } from '../utils/supabase';
+import { PushNotificationService } from '../utils/pushNotifications';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Notification {
   id: string;
@@ -16,44 +19,97 @@ interface Notification {
   data?: any;
 }
 
+interface RenoTimelineNotification {
+  id: string;
+  project_id?: string;
+  project_name?: string;
+  notification_type: string;
+  title: string;
+  message: string;
+  action_url?: string;
+  priority?: 'low' | 'medium' | 'high';
+  metadata?: {
+    task_name?: string;
+    completion_percentage?: number;
+    budget_impact?: number;
+    timeline_impact?: string;
+    suggested_action?: string;
+    potential_savings?: number;
+    material_type?: string;
+    delivery_date?: string;
+  };
+  created_at: string;
+  read_at?: string;
+}
+
 interface NotificationCenterProps {
   onNotificationPress?: (notification: Notification) => void;
 }
 
-export default function NotificationCenter({ onNotificationPress }: NotificationCenterProps) {
-  const { user, isGuest } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(false);
+export function NotificationCenter() {
+  const { user } = useAuth();
+  const [visible, setVisible] = useState(false);
+  const [notifications, setNotifications] = useState<RenoTimelineNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!isGuest && user?.id) {
-      loadNotifications();
+    if (user) {
+      fetchNotifications();
+      
+      // Real-time subscription dla nowych powiadomień
+      const subscription = supabase
+        .channel('renotimeline_notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'cross_app_notifications',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const newNotification = payload.new as RenoTimelineNotification;
+            setNotifications(prev => [newNotification, ...prev]);
+            setUnreadCount(prev => prev + 1);
+            
+            // Update badge count
+            PushNotificationService.updateBadgeCount(unreadCount + 1);
+          }
+        )
+        .subscribe();
+
+      return () => {
+        subscription.unsubscribe();
+      };
     }
-  }, [user?.id, isGuest]);
+  }, [user]);
 
-  const loadNotifications = async () => {
-    if (!user?.id) return;
-
+  const fetchNotifications = async () => {
+    if (!user) return;
+    
     setLoading(true);
     try {
-      const notificationsData = await EventDetectionService.getRecentNotifications(user.id, 20);
-      // Map the data to match our interface
-      const mappedNotifications: Notification[] = notificationsData.map(item => ({
-        id: item.id,
-        title: item.title,
-        message: item.message,
-        notification_type: item.notification_type,
-        source_app: item.source_app,
-        created_at: item.created_at || new Date().toISOString(),
-        is_read: item.is_read || false,
-        data: item.data,
-      }));
-      setNotifications(mappedNotifications);
-      setUnreadCount(mappedNotifications.filter(n => !n.is_read).length);
+      const { data, error } = await supabase
+        .from('cross_app_notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('source_app', 'renotimeline')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      setNotifications(data || []);
+      const unread = data?.filter(n => !n.read_at).length || 0;
+      setUnreadCount(unread);
+      
+      // Update badge count
+      await PushNotificationService.updateBadgeCount(unread);
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      console.error('Error fetching notifications:', error);
+      Alert.alert('Błąd', 'Nie udało się pobrać powiadomień');
     } finally {
       setLoading(false);
     }
@@ -61,182 +117,233 @@ export default function NotificationCenter({ onNotificationPress }: Notification
 
   const markAsRead = async (notificationId: string) => {
     try {
-      await EventDetectionService.markNotificationAsRead(notificationId);
-      setNotifications(prev => 
-        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+      await supabase
+        .from('cross_app_notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', notificationId);
+
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n)
       );
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      
+      const newUnreadCount = Math.max(0, unreadCount - 1);
+      setUnreadCount(newUnreadCount);
+      
+      // Update badge count
+      await PushNotificationService.updateBadgeCount(newUnreadCount);
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
   };
 
-  const handleNotificationPress = (notification: Notification) => {
-    if (!notification.is_read) {
-      markAsRead(notification.id);
+  const markAllAsRead = async () => {
+    try {
+      const unreadNotifications = notifications.filter(n => !n.read_at);
+      const ids = unreadNotifications.map(n => n.id);
+      
+      if (ids.length === 0) return;
+
+      await supabase
+        .from('cross_app_notifications')
+        .update({ read_at: new Date().toISOString() })
+        .in('id', ids);
+
+      setNotifications(prev =>
+        prev.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() }))
+      );
+      
+      setUnreadCount(0);
+      await PushNotificationService.updateBadgeCount(0);
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchNotifications();
+    setRefreshing(false);
+  };
+
+  const handleNotificationAction = async (notification: RenoTimelineNotification) => {
+    // Mark as read when action is taken
+    if (!notification.read_at) {
+      await markAsRead(notification.id);
     }
 
-    // Handle different types of notifications
-    if (notification.data?.calcreno_link) {
-      // Handle CalcReno deep link
-      onNotificationPress?.(notification);
-    } else if (notification.data?.renotimeline_suggestion === 'create_timeline') {
-      // Open RenoTimeline for timeline creation
-      Linking.openURL('https://renotimeline.app');
+    if (notification.action_url) {
+      try {
+        await Linking.openURL(notification.action_url);
+      } catch (error) {
+        console.error('Error opening action URL:', error);
+        Alert.alert('Błąd', 'Nie udało się otworzyć linku');
+      }
     }
-
-    onNotificationPress?.(notification);
   };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'budget_updated':
-        return <AlertTriangle size={20} color="#F59E0B" />;
-      case 'project_milestone':
-        return <CheckCircle size={20} color="#10B981" />;
-      case 'cost_alert':
-        return <AlertTriangle size={20} color="#EF4444" />;
-      default:
-        return <Bell size={20} color="#6B7280" />;
+      case 'progress_update': return '✅';
+      case 'budget_alert': return '💰';
+      case 'milestone': return '🎯';
+      case 'delay_warning': return '⚠️';
+      case 'material_ready': return '📦';
+      case 'cost_savings_opportunity': return '💡';
+      default: return '📢';
     }
   };
 
-  const getNotificationColor = (type: string) => {
-    switch (type) {
-      case 'budget_updated':
-        return '#F59E0B';
-      case 'project_milestone':
-        return '#10B981';
-      case 'cost_alert':
-        return '#EF4444';
-      default:
-        return '#6B7280';
+  const getPriorityColor = (priority?: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-100 border-red-300';
+      case 'medium': return 'bg-yellow-100 border-yellow-300';
+      case 'low': return 'bg-green-100 border-green-300';
+      default: return 'bg-blue-100 border-blue-300';
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    const diffHours = diffMs / (1000 * 60 * 60);
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
 
-    if (diffMins < 60) {
-      return `${diffMins} min temu`;
+    if (diffHours < 1) {
+      return 'Teraz';
     } else if (diffHours < 24) {
-      return `${diffHours} godz. temu`;
+      return `${Math.floor(diffHours)} godz. temu`;
     } else if (diffDays < 7) {
-      return `${diffDays} dni temu`;
+      return `${Math.floor(diffDays)} dni temu`;
     } else {
       return date.toLocaleDateString('pl-PL');
     }
   };
 
-  const renderNotification = ({ item }: { item: Notification }) => (
-    <TouchableOpacity
-      onPress={() => handleNotificationPress(item)}
-      className={`p-4 border-b border-gray-600 ${!item.is_read ? 'bg-gray-700/50' : 'bg-transparent'}`}
-      activeOpacity={0.7}
-    >
-      <View className="flex-row items-start">
-        <View className="mr-3 mt-1">
-          {getNotificationIcon(item.notification_type)}
-        </View>
-        
-        <View className="flex-1">
-          <View className="flex-row items-center justify-between mb-1">
-            <Text className="text-white font-semibold text-sm" numberOfLines={1}>
-              {item.title}
-            </Text>
-            {!item.is_read && (
-              <View className="w-2 h-2 bg-blue-500 rounded-full ml-2" />
-            )}
-          </View>
-          
-          <Text className="text-gray-300 text-sm mb-2" numberOfLines={2}>
-            {item.message}
-          </Text>
-          
-          <View className="flex-row items-center justify-between">
-            <Text className="text-gray-400 text-xs">
-              z {item.source_app === 'renotimeline' ? 'RenoTimeline' : 'CalcReno'}
-            </Text>
-            <Text className="text-gray-400 text-xs">
-              {formatDate(item.created_at)}
-            </Text>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  // Don't show for guest users
-  if (isGuest || !user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <>
-      {/* Notification Bell Icon */}
-      <TouchableOpacity
-        onPress={() => setShowModal(true)}
+      <Pressable
         className="relative p-2"
+        onPress={() => setVisible(true)}
       >
-        <Bell size={24} color="#FFFFFF" />
+        <Ionicons name="notifications" size={24} color="#666" />
         {unreadCount > 0 && (
-          <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[18px] h-[18px] items-center justify-center">
+          <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[20px] h-5 flex items-center justify-center">
             <Text className="text-white text-xs font-bold">
-              {unreadCount > 9 ? '9+' : unreadCount}
+              {unreadCount > 99 ? '99+' : unreadCount}
             </Text>
           </View>
         )}
-      </TouchableOpacity>
+      </Pressable>
 
-      {/* Notifications Modal */}
-      <Modal
-        visible={showModal}
-        animationType="slide"
-        transparent={false}
-        onRequestClose={() => setShowModal(false)}
-      >
-        <LinearGradient
-          colors={["#1E2139", "#2A2D4A"]}
-          style={{ flex: 1 }}
-        >
-          {/* Header */}
-          <View className="flex-row items-center justify-between p-4 pt-12 border-b border-gray-600">
-            <Text className="text-white text-xl font-bold">Powiadomienia</Text>
-            <TouchableOpacity
-              onPress={() => setShowModal(false)}
-              className="p-2"
-            >
-              <X size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <View className="flex-1 bg-white">
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <Text className="text-xl font-bold">Powiadomienia z RenoTimeline</Text>
+            <View className="flex-row items-center space-x-2">
+              {unreadCount > 0 && (
+                <Pressable 
+                  onPress={markAllAsRead}
+                  className="px-3 py-1 bg-blue-100 rounded-full"
+                >
+                  <Text className="text-blue-600 text-sm font-medium">
+                    Oznacz wszystkie
+                  </Text>
+                </Pressable>
+              )}
+              <Pressable onPress={() => setVisible(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </Pressable>
+            </View>
           </View>
 
-          {/* Notifications List */}
-          {notifications.length === 0 ? (
-            <View className="flex-1 items-center justify-center">
-              <Bell size={48} color="#6B7280" />
-              <Text className="text-gray-400 text-lg mt-4">
-                Brak powiadomień
-              </Text>
-              <Text className="text-gray-500 text-sm mt-2 text-center mx-4">
-                Tutaj pojawią się powiadomienia z RenoTimeline o postępach w Twoich projektach
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={notifications}
-              renderItem={renderNotification}
-              keyExtractor={(item) => item.id}
-              refreshing={loading}
-              onRefresh={loadNotifications}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
-        </LinearGradient>
+          <ScrollView
+            className="flex-1"
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
+            {loading ? (
+              <View className="flex-1 justify-center items-center p-8">
+                <Text className="text-gray-500">Ładowanie...</Text>
+              </View>
+            ) : notifications.length === 0 ? (
+              <View className="flex-1 justify-center items-center p-8">
+                <Ionicons name="notifications-off" size={64} color="#ccc" />
+                <Text className="text-gray-500 text-center mt-4">
+                  Brak powiadomień z RenoTimeline
+                </Text>
+                <Text className="text-gray-400 text-center text-sm mt-2">
+                  Gdy Twoje projekty będą realizowane w RenoTimeline, tutaj pojawią się aktualizacje
+                </Text>
+              </View>
+            ) : (
+              notifications.map((notification) => (
+                <Pressable
+                  key={notification.id}
+                  className={`m-3 p-4 rounded-lg border ${getPriorityColor(notification.priority)} ${
+                    !notification.read_at ? 'opacity-100' : 'opacity-70'
+                  }`}
+                  onPress={() => markAsRead(notification.id)}
+                >
+                  <View className="flex-row items-start">
+                    <Text className="text-2xl mr-3">
+                      {getNotificationIcon(notification.notification_type)}
+                    </Text>
+                    <View className="flex-1">
+                      <Text className="font-semibold text-gray-800 mb-1">
+                        {notification.title}
+                      </Text>
+                      <Text className="text-gray-600 mb-2">
+                        {notification.message}
+                      </Text>
+                      {notification.project_name && (
+                        <Text className="text-xs text-gray-500">
+                          Projekt: {notification.project_name}
+                        </Text>
+                      )}
+                      <Text className="text-xs text-gray-400">
+                        {formatTimeAgo(notification.created_at)}
+                      </Text>
+
+                      {notification.metadata?.suggested_action && (
+                        <View className="mt-3 p-2 bg-blue-50 rounded">
+                          <Text className="text-sm text-blue-800">
+                            💡 Sugerowane działanie: {notification.metadata.suggested_action}
+                          </Text>
+                        </View>
+                      )}
+
+                      {notification.metadata?.budget_impact && (
+                        <View className="mt-2 p-2 bg-yellow-50 rounded">
+                          <Text className="text-sm text-yellow-800">
+                            💰 Wpływ na budżet: {notification.metadata.budget_impact > 0 ? '+' : ''}{notification.metadata.budget_impact} PLN
+                          </Text>
+                        </View>
+                      )}
+
+                      {notification.action_url && (
+                        <Pressable 
+                          className="mt-3 bg-blue-500 rounded px-3 py-2 self-start"
+                          onPress={() => handleNotificationAction(notification)}
+                        >
+                          <Text className="text-white text-sm font-medium">
+                            Zobacz w RenoTimeline
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
+                    {!notification.read_at && (
+                      <View className="w-3 h-3 bg-blue-500 rounded-full ml-2" />
+                    )}
+                  </View>
+                </Pressable>
+              ))
+            )}
+          </ScrollView>
+        </View>
       </Modal>
     </>
   );

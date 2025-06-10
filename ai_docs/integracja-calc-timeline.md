@@ -570,366 +570,811 @@ export function MigrationScreen({ onComplete }: { onComplete: () => void }) {
 
 ---
 
-## Faza 1: Basic Project Linking (MVP)
+## Faza 2: Smart Notifications (RenoTimeline → CalcReno)
 
 ### 🎯 Cel Fazy:
-Podstawowe połączenie projektów między CalcReno a RenoTimeline z minimalnym przesyłaniem danych.
-**WYMAGA: Ukończony Etap Przygotowawczy (CalcReno w Supabase)**
+**CalcReno receives intelligent notifications from RenoTimeline** o postępach, problemach i możliwościach optymalizacji projektów.
 
 ### 📋 Zakres Prac:
 
-#### 1.1 **Simple Project Export (CalcReno → RenoTimeline)**
-- **"Utwórz harmonogram w RenoTimeline" button** w CalcReno (dla zalogowanych users)
-- **Basic API endpoint** w RenoTimeline przyjmujący dane projektu z CalcReno
-- **One-way project creation** - projekt powstaje w RenoTimeline na podstawie CalcReno z Supabase
-- **Shared user verification** - tylko owner CalcReno project może eksportować
-- **Reference link** w RenoTimeline powrót do projektu źródłowego w CalcReno
+#### 2.1 **Notification Reception System w CalcReno**
 
 **CalcReno Implementation Details:**
 ```typescript
-// app/components/ProjectExportButton.tsx - nowy komponent
-import { useState } from 'react';
-import { Pressable, Text, Alert } from 'react-native';
-import { Linking } from 'expo-linking';
+// app/components/NotificationCenter.tsx - Enhanced version
+import { useState, useEffect } from 'react';
+import { View, Text, Pressable, Modal, ScrollView, RefreshControl } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../utils/supabase';
 import { useAuth } from '../hooks/useAuth';
-import type { Project } from '../utils/storage';
 
-interface ProjectExportButtonProps {
-  project: Project;
+interface RenoTimelineNotification {
+  id: string;
+  project_id: string;
+  project_name: string;
+  notification_type: 'progress_update' | 'budget_alert' | 'milestone' | 'delay_warning';
+  title: string;
+  message: string;
+  action_url?: string;
+  priority: 'low' | 'medium' | 'high';
+  metadata?: {
+    task_name?: string;
+    completion_percentage?: number;
+    budget_impact?: number;
+    timeline_impact?: string;
+    suggested_action?: string;
+  };
+  created_at: string;
+  read_at?: string;
 }
 
-export function ProjectExportButton({ project }: ProjectExportButtonProps) {
+export function NotificationCenter() {
   const { user } = useAuth();
-  const [exporting, setExporting] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [notifications, setNotifications] = useState<RenoTimelineNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const exportToRenoTimeline = async () => {
-    if (!user) {
-      Alert.alert('Błąd', 'Musisz być zalogowany aby eksportować projekt');
-      return;
+  useEffect(() => {
+    if (user) {
+      fetchNotifications();
+      // Real-time subscription dla nowych powiadomień
+      const subscription = supabase
+        .channel('renotimeline_notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'cross_app_notifications',
+            filter: `recipient_user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            setNotifications(prev => [payload.new as RenoTimelineNotification, ...prev]);
+            setUnreadCount(prev => prev + 1);
+          }
+        )
+        .subscribe();
+
+      return () => subscription.unsubscribe();
     }
+  }, [user]);
 
-    setExporting(true);
-
+  const fetchNotifications = async () => {
+    if (!user) return;
+    
     try {
-      // Przygotowanie danych do eksportu (tylko podstawowe)
-      const exportData = {
-        calcreno_project_id: project.id,
-        name: project.name,
-        description: project.description || '',
-        start_date: project.startDate,
-        end_date: project.endDate,
-        estimated_budget: project.totalCost || 0,
-        user_email: user.email,
-      };
+      const { data, error } = await supabase
+        .from('cross_app_notifications')
+        .select('*')
+        .eq('recipient_user_id', user.id)
+        .eq('source_app', 'renotimeline')
+        .order('created_at', { ascending: false })
+        .limit(50);
 
-      // Wywołanie API RenoTimeline
-      const response = await fetch('https://renotimeline.app/api/import-from-calcreno', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.access_token}`,
-        },
-        body: JSON.stringify(exportData),
-      });
+      if (error) throw error;
 
-      if (response.ok) {
-        const result = await response.json();
-        
-        Alert.alert(
-          'Sukces!', 
-          'Projekt został eksportowany do RenoTimeline',
-          [
-            { text: 'OK' },
-            { 
-              text: 'Otwórz RenoTimeline', 
-              onPress: () => Linking.openURL(`https://renotimeline.app/project/${result.project_id}`)
-            }
-          ]
-        );
-      } else {
-        throw new Error('Błąd eksportu');
-      }
+      setNotifications(data || []);
+      setUnreadCount(data?.filter(n => !n.read_at).length || 0);
     } catch (error) {
-      Alert.alert('Błąd', 'Nie udało się eksportować projektu');
-    } finally {
-      setExporting(false);
+      console.error('Error fetching notifications:', error);
+    }
+  };
+
+  const markAsRead = async (notificationId: string) => {
+    try {
+      await supabase
+        .from('cross_app_notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', notificationId);
+
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n)
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchNotifications();
+    setRefreshing(false);
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'progress_update': return '✅';
+      case 'budget_alert': return '💰';
+      case 'milestone': return '🎯';
+      case 'delay_warning': return '⚠️';
+      default: return '📢';
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'bg-red-100 border-red-300';
+      case 'medium': return 'bg-yellow-100 border-yellow-300';
+      default: return 'bg-blue-100 border-blue-300';
     }
   };
 
   if (!user) return null;
 
   return (
+    <>
     <Pressable
-      className="bg-purple-500 rounded p-3 mt-2"
-      onPress={exportToRenoTimeline}
-      disabled={exporting}
-    >
-      <Text className="text-white text-center font-semibold">
-        {exporting ? 'Eksportowanie...' : '📅 Utwórz harmonogram w RenoTimeline'}
+        className="relative p-2"
+        onPress={() => setVisible(true)}
+      >
+        <Ionicons name="notifications" size={24} color="#666" />
+        {unreadCount > 0 && (
+          <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[20px] h-5 flex items-center justify-center">
+            <Text className="text-white text-xs font-bold">
+              {unreadCount > 99 ? '99+' : unreadCount}
       </Text>
+          </View>
+        )}
     </Pressable>
+
+      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <View className="flex-1 bg-white">
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <Text className="text-xl font-bold">Powiadomienia z RenoTimeline</Text>
+            <Pressable onPress={() => setVisible(false)}>
+              <Ionicons name="close" size={24} color="#666" />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            className="flex-1"
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
+            {notifications.length === 0 ? (
+              <View className="flex-1 justify-center items-center p-8">
+                <Ionicons name="notifications-off" size={64} color="#ccc" />
+                <Text className="text-gray-500 text-center mt-4">
+                  Brak powiadomień z RenoTimeline
+                </Text>
+                <Text className="text-gray-400 text-center text-sm mt-2">
+                  Gdy Twoje projekty będą realizowane w RenoTimeline, tutaj pojawią się aktualizacje
+                </Text>
+              </View>
+            ) : (
+              notifications.map((notification) => (
+                <Pressable
+                  key={notification.id}
+                  className={`m-3 p-4 rounded-lg border ${getPriorityColor(notification.priority)} ${
+                    !notification.read_at ? 'opacity-100' : 'opacity-70'
+                  }`}
+                  onPress={() => markAsRead(notification.id)}
+                >
+                  <View className="flex-row items-start">
+                    <Text className="text-2xl mr-3">
+                      {getNotificationIcon(notification.notification_type)}
+                    </Text>
+                    <View className="flex-1">
+                      <Text className="font-semibold text-gray-800 mb-1">
+                        {notification.title}
+                      </Text>
+                      <Text className="text-gray-600 mb-2">
+                        {notification.message}
+                      </Text>
+                      <Text className="text-xs text-gray-500">
+                        Projekt: {notification.project_name}
+                      </Text>
+                      <Text className="text-xs text-gray-400">
+                        {new Date(notification.created_at).toLocaleString('pl-PL')}
+                      </Text>
+
+                      {notification.metadata?.suggested_action && (
+                        <View className="mt-3 p-2 bg-blue-50 rounded">
+                          <Text className="text-sm text-blue-800">
+                            💡 Sugerowane działanie: {notification.metadata.suggested_action}
+                          </Text>
+                        </View>
+                      )}
+
+                      {notification.action_url && (
+                        <Pressable className="mt-2 bg-blue-500 rounded px-3 py-2 self-start">
+                          <Text className="text-white text-sm font-medium">
+                            Zobacz w RenoTimeline
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
+                    {!notification.read_at && (
+                      <View className="w-3 h-3 bg-blue-500 rounded-full ml-2" />
+                    )}
+                  </View>
+                </Pressable>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+    </>
   );
 }
 ```
 
-**RenoTimeline API Endpoint (dla referencji):**
+#### 2.2 **Notification API Endpoint w CalcReno**
+
 ```typescript
-// RenoTimeline: /api/import-from-calcreno endpoint
-app.post('/api/import-from-calcreno', async (req, res) => {
-  const { calcreno_project_id, name, description, start_date, end_date, estimated_budget, user_email } = req.body;
+// app/api/notifications.ts - nowy plik (jeśli potrzebujesz local API)
+// Lub bezpośrednio przez Supabase triggers
+
+// Supabase function dla webhook z RenoTimeline
+create or replace function handle_renotimeline_notification()
+returns trigger as $$
+begin
+  -- Automatycznie wyślij email notification
+  perform net.http_post(
+    url := 'https://your-email-service.com/send',
+    headers := '{"Content-Type": "application/json"}'::jsonb,
+    body := jsonb_build_object(
+      'to', (select email from auth.users where id = new.recipient_user_id),
+      'subject', new.title,
+      'html', format('<h2>%s</h2><p>%s</p><p>Projekt: %s</p>', 
+        new.title, new.message, new.project_name)
+    )
+  );
+  return new;
+end;
+$$ language plpgsql;
+
+-- Trigger przy dodaniu nowego powiadomienia
+create trigger on_renotimeline_notification_created
+  after insert on cross_app_notifications
+  for each row execute function handle_renotimeline_notification();
+```
+
+#### 2.3 **Enhanced Database Schema for Notifications**
+
+```sql
+-- Rozszerzona tabela powiadomień
+ALTER TABLE cross_app_notifications ADD COLUMN IF NOT EXISTS recipient_user_id uuid REFERENCES auth.users(id);
+ALTER TABLE cross_app_notifications ADD COLUMN IF NOT EXISTS project_name text;
+ALTER TABLE cross_app_notifications ADD COLUMN IF NOT EXISTS notification_type text;
+ALTER TABLE cross_app_notifications ADD COLUMN IF NOT EXISTS action_url text;
+ALTER TABLE cross_app_notifications ADD COLUMN IF NOT EXISTS read_at timestamp;
+
+-- Indeksy dla performance
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON cross_app_notifications(recipient_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON cross_app_notifications(recipient_user_id) WHERE read_at IS NULL;
+```
+
+#### 2.4 **Integration w Main App Layout**
+
+```typescript
+// app/_layout.tsx - dodaj NotificationCenter do header
+import { NotificationCenter } from './components/NotificationCenter';
+
+// W głównym headerze (obok logout button)
+<View className="flex-row items-center space-x-2">
+  <NotificationCenter />
+  {user && (
+    <Pressable onPress={handleLogout} className="p-2">
+      <Ionicons name="log-out" size={24} color="#666" />
+    </Pressable>
+  )}
+</View>
+```
+
+#### 2.5 **Rich Email Templates (CalcReno Users)**
+
+```html
+<!-- Email template for CalcReno users -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Aktualizacja z RenoTimeline</title>
+</head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <div style="background: #4F46E5; color: white; padding: 20px; text-align: center;">
+    <h1>📅 Aktualizacja z RenoTimeline</h1>
+  </div>
   
-  // Weryfikacja użytkownika
-  const user = await getUserByEmail(user_email);
-  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  <div style="padding: 20px;">
+    <h2>{{notification.title}}</h2>
+    <p>{{notification.message}}</p>
+    
+    <div style="background: #F3F4F6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+      <h3>📊 Szczegóły projektu: {{project_name}}</h3>
+      {{#if metadata.completion_percentage}}
+      <p><strong>Postęp:</strong> {{metadata.completion_percentage}}%</p>
+      {{/if}}
+      {{#if metadata.budget_impact}}
+      <p><strong>Wpływ na budżet:</strong> {{metadata.budget_impact}} PLN</p>
+      {{/if}}
+      {{#if metadata.timeline_impact}}
+      <p><strong>Wpływ na harmonogram:</strong> {{metadata.timeline_impact}}</p>
+      {{/if}}
+    </div>
 
-  // Tworzenie projektu w RenoTimeline
-  const project = await createProject({
-    name,
-    description,
-    start_date,
-    end_date,
-    budget: estimated_budget,
-    user_id: user.id,
-    source: 'calcreno',
-    source_project_id: calcreno_project_id,
-  });
+    {{#if metadata.suggested_action}}
+    <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0;">
+      <h4>💡 Sugerowane działanie:</h4>
+      <p>{{metadata.suggested_action}}</p>
+    </div>
+    {{/if}}
 
-  res.json({ project_id: project.id, success: true });
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="calcreno://project/{{project_id}}" 
+         style="background: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-right: 10px;">
+        📱 Otwórz w CalcReno
+      </a>
+      <a href="{{action_url}}" 
+         style="background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">
+        👀 Zobacz w RenoTimeline
+      </a>
+    </div>
+  </div>
+  
+  <div style="background: #F9FAFB; padding: 15px; text-align: center; color: #6B7280; font-size: 14px;">
+    <p>Otrzymujesz to powiadomienie, ponieważ Twój projekt CalcReno jest realizowany w RenoTimeline.</p>
+    <p><a href="#" style="color: #4F46E5;">Wyłącz powiadomienia</a> | <a href="#" style="color: #4F46E5;">Zarządzaj preferencjami</a></p>
+  </div>
+</body>
+</html>
+```
+
+#### 2.6 **Event Types from RenoTimeline**
+
+```typescript
+// Types of notifications CalcReno receives from RenoTimeline
+interface RenoTimelineEventTypes {
+  'progress_update': {
+    task_name: string;
+    completion_percentage: number;
+    actual_vs_planned: string;
+  };
+  'budget_alert': {
+    budget_variance: number;
+    cost_category: string;
+    suggested_action: string;
+  };
+  'milestone': {
+    milestone_name: string;
+    completion_date: string;
+    next_phase: string;
+  };
+  'delay_warning': {
+    delayed_task: string;
+    impact_days: number;
+    critical_path: boolean;
+  };
+  'material_ready': {
+    material_type: string;
+    delivery_date: string;
+    installation_ready: boolean;
+  };
+  'cost_savings_opportunity': {
+    potential_savings: number;
+    optimization_area: string;
+    action_required: string;
+  };
+}
+```
+
+#### 2.7 **CalcReno Specific Notification Handling**
+
+```typescript
+// app/utils/notificationHandler.ts - nowy plik
+import { Alert } from 'react-native';
+import { Linking } from 'expo-linking';
+import { supabase } from './supabase';
+
+export class CalcRenoNotificationHandler {
+  static async handleProgressUpdate(notification: RenoTimelineNotification) {
+    // Sprawdź czy completion_percentage pozwala na aktualizację kosztorysu
+    if (notification.metadata?.completion_percentage === 100) {
+      Alert.alert(
+        'Zadanie ukończone!',
+        `Zadanie "${notification.metadata.task_name}" zostało ukończone. Czy chcesz sprawdzić rzeczywiste koszty w kalkulacji?`,
+        [
+          { text: 'Później' },
+          { 
+            text: 'Sprawdź koszt', 
+            onPress: () => Linking.openURL(`calcreno://project/${notification.project_id}/calculate`)
+          }
+        ]
+      );
+    }
+  }
+
+  static async handleBudgetAlert(notification: RenoTimelineNotification) {
+    const budgetImpact = notification.metadata?.budget_impact;
+    if (budgetImpact && Math.abs(budgetImpact) > 1000) {
+      Alert.alert(
+        'Znacząca zmiana budżetu',
+        `Zmiana budżetu: ${budgetImpact > 0 ? '+' : ''}${budgetImpact} PLN. Czy chcesz zaktualizować kalkulację w CalcReno?`,
+        [
+          { text: 'Nie teraz' },
+          { 
+            text: 'Aktualizuj kalkulację', 
+            onPress: () => Linking.openURL(`calcreno://project/${notification.project_id}/budget`)
+          }
+        ]
+      );
+    }
+  }
+
+  static async handleMilestone(notification: RenoTimelineNotification) {
+    // Zaznacz milestone w CalcReno project status
+    try {
+      await supabase
+        .from('calcreno_projects')
+        .update({ 
+          status: 'W trakcie',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', notification.project_id);
+    } catch (error) {
+      console.error('Failed to update project status:', error);
+    }
+  }
+
+  static async handleDelayWarning(notification: RenoTimelineNotification) {
+    if (notification.metadata?.critical_path) {
+      Alert.alert(
+        'Krytyczne opóźnienie!',
+        `Opóźnienie zadania "${notification.metadata.delayed_task}" może wpłynąć na cały projekt. Sprawdź czy potrzebne są dodatkowe zasoby.`,
+        [
+          { text: 'OK' },
+          { 
+            text: 'Zobacz harmonogram', 
+            onPress: () => Linking.openURL(notification.action_url || '')
+          }
+        ]
+      );
+    }
+  }
+}
+```
+
+#### 2.8 **Push Notifications Implementation**
+
+**Dependencies Installation:**
+```bash
+npx expo install expo-notifications expo-device expo-constants
+```
+
+**CalcReno Push Notification Service:**
+```typescript
+// app/utils/pushNotifications.ts - nowy plik
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+import { supabase } from './supabase';
+
+// Configure notification behavior
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
+export class PushNotificationService {
+  static async registerForPushNotifications() {
+    let token;
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+
+    if (Device.isDevice) {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      
+      if (finalStatus !== 'granted') {
+        console.log('Failed to get push token for push notification!');
+        return null;
+      }
+      
+      try {
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+        if (!projectId) {
+          throw new Error('Project ID not found');
+        }
+        
+        token = (await Notifications.getExpoPushTokenAsync({
+          projectId,
+        })).data;
+        
+        console.log('Push token:', token);
+        
+        // Save token to Supabase for the current user
+        await this.savePushTokenToDatabase(token);
+        
+      } catch (error) {
+        console.log('Error getting push token:', error);
+      }
+    } else {
+      console.log('Must use physical device for Push Notifications');
+    }
+
+    return token;
+  }
+
+  static async savePushTokenToDatabase(token: string) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('user_push_tokens')
+        .upsert({
+          user_id: user.id,
+          push_token: token,
+          platform: Platform.OS,
+          app_name: 'calcreno',
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id,app_name'
+        });
+
+      if (error) {
+        console.error('Error saving push token:', error);
+      }
+    } catch (error) {
+      console.error('Error in savePushTokenToDatabase:', error);
+    }
+  }
+
+  static async handleNotificationResponse(response: Notifications.NotificationResponse) {
+    const data = response.notification.request.content.data;
+    
+    if (data?.type === 'renotimeline_notification') {
+      // Handle different notification types
+      switch (data.notification_type) {
+        case 'progress_update':
+          if (data.project_id) {
+            Linking.openURL(`calcreno://project/${data.project_id}`);
+          }
+          break;
+        case 'budget_alert':
+          if (data.project_id) {
+            Linking.openURL(`calcreno://project/${data.project_id}/budget`);
+          }
+          break;
+        case 'milestone':
+          if (data.action_url) {
+            Linking.openURL(data.action_url);
+          }
+          break;
+        default:
+          // Open notification center
+          break;
+      }
+    }
+  }
+
+  static setupNotificationListeners() {
+    // Handle notifications when app is running
+    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notification received:', notification);
+      // Update badge count or show in-app notification
+    });
+
+    // Handle notification taps
+    const responseListener = Notifications.addNotificationResponseReceivedListener(
+      this.handleNotificationResponse
+    );
+
+    return () => {
+      Notifications.removeNotificationSubscription(notificationListener);
+      Notifications.removeNotificationSubscription(responseListener);
+    };
+  }
+}
+```
+
+**Enhanced Auth Hook with Push Notifications:**
+```typescript
+// app/hooks/useAuth.tsx - Enhanced version
+import { useState, useEffect } from 'react';
+import { supabase } from '../utils/supabase';
+import { PushNotificationService } from '../utils/pushNotifications';
+import type { User } from '@supabase/supabase-js';
+
+export function useAuth() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+      
+      // Register for push notifications if user is logged in
+      if (session?.user) {
+        PushNotificationService.registerForPushNotifications();
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUser(session?.user ?? null);
+        setLoading(false);
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          // Register for push notifications when user signs in
+          await PushNotificationService.registerForPushNotifications();
+        }
+      }
+    );
+
+    // Setup notification listeners
+    const cleanup = PushNotificationService.setupNotificationListeners();
+
+    return () => {
+      subscription.unsubscribe();
+      cleanup();
+    };
+  }, []);
+
+  return { user, loading };
+}
+```
+
+**Database Schema for Push Tokens:**
+```sql
+-- User push tokens table
+CREATE TABLE user_push_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  push_token text NOT NULL,
+  platform text NOT NULL CHECK (platform IN ('ios', 'android')),
+  app_name text NOT NULL CHECK (app_name IN ('calcreno', 'renotimeline')),
+  created_at timestamp DEFAULT now(),
+  updated_at timestamp DEFAULT now(),
+  UNIQUE(user_id, app_name)
+);
+
+-- Enable RLS
+ALTER TABLE user_push_tokens ENABLE ROW LEVEL SECURITY;
+
+-- RLS policy
+CREATE POLICY "Users can manage their own push tokens" ON user_push_tokens
+  FOR ALL USING (auth.uid() = user_id);
+```
+
+**Enhanced Cross-App Notification with Push:**
+```typescript
+// Supabase Edge Function: send-push-notification
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
+serve(async (req) => {
+  try {
+    const { notification } = await req.json();
+    
+    // Get user's push token for CalcReno
+    const { data: tokenData } = await supabase
+      .from('user_push_tokens')
+      .select('push_token')
+      .eq('user_id', notification.recipient_user_id)
+      .eq('app_name', 'calcreno')
+      .single();
+
+    if (!tokenData?.push_token) {
+      return new Response('No push token found', { status: 404 });
+    }
+
+    // Send push notification via Expo Push API
+    const message = {
+      to: tokenData.push_token,
+      sound: 'default',
+      title: notification.title,
+      body: notification.message,
+      data: {
+        type: 'renotimeline_notification',
+        notification_type: notification.notification_type,
+        project_id: notification.project_id,
+        action_url: notification.action_url,
+      },
+      badge: 1,
+      priority: notification.priority === 'high' ? 'high' : 'normal',
+    };
+
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Accept-encoding': 'gzip, deflate',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+
+    const result = await response.json();
+    
+    return new Response(JSON.stringify(result), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 });
 ```
 
-#### 1.2 **Cross-App Notification API**
-```typescript
-interface CrossAppNotification {
-  project_id: string;
-  source_app: 'calcreno' | 'renotimeline';
-  event_type: 'budget_updated' | 'project_milestone' | 'cost_alert';
-  message: string;
-  actionable_link?: string;
-  priority: 'low' | 'medium' | 'high';
-}
-```
-
-#### 1.3 **Basic Event Detection w CalcReno**
-- **Budget Changes** - gdy budżet przekracza X%
-- **New Cost Items** - dodanie znaczącej pozycji
-- **Project Completion** - kosztorys oznaczony jako finalny
-
-**CalcReno Implementation Details:**
-```typescript
-// app/utils/eventDetection.ts - nowy plik
-import { supabase } from './supabase';
-import type { Project } from './storage';
-
-export class EventDetectionService {
-  static async detectBudgetChanges(project: Project, previousTotalCost: number = 0) {
-    const currentCost = project.totalCost || 0;
-    const changePercentage = previousTotalCost > 0 
-      ? ((currentCost - previousTotalCost) / previousTotalCost) * 100 
-      : 0;
-
-    // Jeśli zmiana > 15%, wyślij powiadomienie
-    if (Math.abs(changePercentage) > 15) {
-      await this.sendCrossAppNotification({
-        project_id: project.id,
-        source_app: 'calcreno',
-        event_type: 'budget_updated',
-        message: `Budżet projektu "${project.name}" ${changePercentage > 0 ? 'wzrósł' : 'spadł'} o ${Math.abs(changePercentage).toFixed(1)}%`,
-        actionable_link: `calcreno://project/${project.id}`,
-        priority: changePercentage > 30 ? 'high' : 'medium',
-        metadata: {
-          old_cost: previousTotalCost,
-          new_cost: currentCost,
-          change_percentage: changePercentage,
+**App Configuration for Push Notifications:**
+```json
+// app.json - Enhanced configuration
+{
+  "expo": {
+    "name": "CalcReno",
+    "slug": "calcreno",
+    "scheme": "calcreno",
+    "notification": {
+      "icon": "./assets/images/notification-icon.png",
+      "color": "#4F46E5",
+      "sounds": ["./assets/sounds/notification.wav"]
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#4F46E5",
+          "defaultChannel": "default"
         }
-      });
-    }
-  }
-
-  static async detectProjectCompletion(project: Project) {
-    // Sprawdź czy wszystkie pomieszczenia mają kalkulacje
-    const completedRooms = project.rooms.filter(room => room.materials?.totalCost);
-    const completionRate = (completedRooms.length / project.rooms.length) * 100;
-
-    if (completionRate === 100 && project.status !== 'Zakończony') {
-      await this.sendCrossAppNotification({
-        project_id: project.id,
-        source_app: 'calcreno',
-        event_type: 'project_milestone',
-        message: `Kosztorys projektu "${project.name}" został ukończony! Czas na realizację.`,
-        actionable_link: `renotimeline://project/${project.id}`,
-        priority: 'high',
-        metadata: {
-          total_rooms: project.rooms.length,
-          total_cost: project.totalCost,
-        }
-      });
-    }
-  }
-
-  static async detectSignificantCostItem(project: Project, roomId: string, newCost: number) {
-    const totalBudget = project.totalCost || 0;
-    const costPercentage = totalBudget > 0 ? (newCost / totalBudget) * 100 : 0;
-
-    // Jeśli koszt jednego pomieszczenia > 25% całego budżetu
-    if (costPercentage > 25) {
-      await this.sendCrossAppNotification({
-        project_id: project.id,
-        source_app: 'calcreno',
-        event_type: 'cost_alert',
-        message: `Uwaga! Pomieszczenie w projekcie "${project.name}" pochłania ${costPercentage.toFixed(1)}% całego budżetu`,
-        priority: 'medium',
-        metadata: {
-          room_id: roomId,
-          room_cost: newCost,
-          cost_percentage: costPercentage,
-        }
-      });
-    }
-  }
-
-  private static async sendCrossAppNotification(notification: any) {
-    try {
-      // 1. Zapisz powiadomienie w Supabase
-      await supabase.from('cross_app_notifications').insert(notification);
-      
-      // 2. Sprawdź czy projekt ma połączenie z RenoTimeline
-      const { data: linkedProject } = await supabase
-        .from('project_links')
-        .select('renotimeline_project_id')
-        .eq('calcreno_project_id', notification.project_id)
-        .single();
-
-      if (linkedProject) {
-        // 3. Wyślij powiadomienie do RenoTimeline
-        await fetch('https://renotimeline.app/api/cross-app-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...notification,
-            target_project_id: linkedProject.renotimeline_project_id,
-          }),
-        });
-      }
-    } catch (error) {
-      console.error('Failed to send cross-app notification:', error);
-    }
+      ]
+    ]
   }
 }
 ```
 
-**Integracja z istniejącym kodem:**
+**Enhanced Main App Layout with Push Setup:**
 ```typescript
-// Modyfikacja w app/hooks/useProjectData.tsx
-const handleSaveCalculation = async (calculation: any, selectedRoom: Room | null) => {
-  if (!project || !selectedRoom) return;
+// app/_layout.tsx - Enhanced with push notifications
+import { useEffect } from 'react';
+import { PushNotificationService } from './utils/pushNotifications';
+import { useAuth } from './hooks/useAuth';
 
-  const previousTotalCost = project.totalCost || 0;
+export default function RootLayout() {
+  const { user } = useAuth();
 
-  const updatedRooms = project.rooms.map((r) =>
-    r.id === selectedRoom.id ? { ...r, materials: calculation } : r,
-  );
+  useEffect(() => {
+    if (user) {
+      // Register for push notifications when app starts and user is authenticated
+      PushNotificationService.registerForPushNotifications();
+    }
+  }, [user]);
 
-  const totalCost = updatedRooms.reduce(
-    (sum, room) => sum + (room.materials?.totalCost || 0),
-    0,
-  );
-
-  const updatedProject = {
-    ...project,
-    rooms: updatedRooms,
-    totalCost,
-  };
-
-  await StorageService.updateProject(updatedProject);
-  setProject(updatedProject);
-
-  // NOWE: Wykrywanie wydarzeń
-  await EventDetectionService.detectBudgetChanges(updatedProject, previousTotalCost);
-  await EventDetectionService.detectSignificantCostItem(
-    updatedProject, 
-    selectedRoom.id, 
-    calculation.totalCost
-  );
-  await EventDetectionService.detectProjectCompletion(updatedProject);
-
-  showSuccess("Sukces", "Kalkulacja została zapisana");
-};
+  // ... rest of layout code
+}
 ```
-
-#### 1.4 **RenoTimeline Notification Center Enhancement**
-- **Dedicated CalcReno notifications section**
-- **Smart filtering** - tylko relevantne dla użytkownika
-- **Action buttons** - "Zobacz w CalcReno", "Aktualizuj Timeline"
 
 ### 📈 Success Metrics:
-- 50%+ projektów ma połączenie CalcReno ↔ RenoTimeline
-- 80%+ users klikają w powiadomienia cross-app
-- 30%+ users regularnie używa obu aplikacji
-
-## Faza 2: Smart Notifications
-
-### 🎯 Cel Fazy:
-Automatyczne wykrywanie ważnych wydarzeń i wysyłanie proaktywnych powiadomień między aplikacjami.
-
-### 📋 Zakres Prac:
-
-#### 2.1 **Automatic Event Detection w Obu Aplikacjach**
-**RenoTimeline Side:**
-- **Progress Updates** - zadanie wyskakuje i zostać ukończone
-- **Budget Alerts** - projekt przekracza zaplantowane ramy czasowe  
-- **Team Changes** - nowy członek zespołu, zmiany uprawnień
-
-**CalcReno Side:**
-- **Cost Variations** - znaczące zmiany w kosztach materiałów
-- **Budget Revisions** - aktualizacja kosztorysu
-- **Supplier Issues** - zmiany cen, dostępności materiałów
-
-#### 2.2 **Rich Email Templates**
-**From RenoTimeline:**
-```html
-📧 [RenoTimeline] Aktualizacja projektu "Remont kuchni"
-
-Część: 
-Mały aktualizacja z projektu "Remont kuchni":
-✅ Zadanie "Wymiana instalacji elektrycznej" zostało ukończone zgodnie z planem!
-
-🔍 Sugerujemy sprawdzenie w CalcReno:
-- Czy czas pracy był zgodny z kalkulacją
-- Czy nie ma oszczędności na kosztach robocizny
-
-🔗 [Otwórz projekt w CalcReno] [Zobacz szczegóły w RenoTimeline]
-
-Pozdrowienia,
-Zespół RenoTimeline
-```
-
-#### 2.3 **Cross-App Notification API - Enhanced**
-```typescript
-interface SmartNotification extends CrossAppNotification {
-  suggested_actions: Array<{
-    action: string;
-    app: 'calcreno' | 'renotimeline';
-    url: string;
-  }>;
-  correlation_data?: {
-    budget_impact?: number;
-    timeline_impact?: string;
-    cost_savings?: number;
-  };
-}
-```
-
-#### 2.4 **In-App Notification Center**
-- **Dedicated sections** dla każdej aplikacji
-- **Smart aggregation** - grouped notifications
-- **Action-oriented UI** - clear next steps
-- **Bi-directional deep linking**
-
-### 📈 Success Metrics:
-- 70%+ notification open rate
-- 40%+ users take suggested actions
-- 25% wzrost user engagement w obu aplikacjach
+- **90%+ notification delivery rate** z RenoTimeline do CalcReno
+- **70%+ open rate** dla email notifications
+- **50%+ users** regularnie sprawdzają notification center
+- **30%+ action rate** na suggested actions w powiadomieniach
 
 ## Faza 3: AI Integration
 

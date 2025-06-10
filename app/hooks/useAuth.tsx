@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '../utils/supabase';
 import type { User, Session } from '@supabase/supabase-js';
+import { PushNotificationService } from '../utils/pushNotifications';
 
 interface AuthContextType {
   user: User | null;
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<{ firstName?: string; lastName?: string } | null>(null);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [showSignupSuccess, setShowSignupSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchUserProfile = async (userId: string) => {
     try {
@@ -93,19 +95,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase(),
+        password,
+      });
+
+      if (error) throw error;
+
+      // Register for push notifications after successful login
+      await PushNotificationService.registerForPushNotifications();
+      
+      return { success: true };
+    } catch (error: any) {
+      setError(error.message);
+      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signUp = async (email: string, password: string, firstName?: string, lastName?: string) => {
     try {
-      console.log('Attempting signup for:', email, 'with metadata:', { firstName, lastName });
+      setLoading(true);
+      setError(null);
       
-      const { error, data } = await supabase.auth.signUp({
-        email,
+      const { data, error } = await supabase.auth.signUp({
+        email: email.toLowerCase(),
         password,
         options: {
           data: {
@@ -115,52 +134,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
-      console.log('Signup result:', { 
-        error: error?.message, 
-        userId: data?.user?.id, 
-        userEmail: data?.user?.email,
-        userMetadata: data?.user?.user_metadata 
-      });
+      if (error) throw error;
 
-      if (error) {
-        console.error('Signup error details:', error);
-        
-        if (error.message.includes('User already registered')) {
-          return { 
-            error: { 
-              message: 'Użytkownik już istnieje. Użyj opcji "Zaloguj się" lub zresetuj hasło.' 
-            } 
-          };
-        }
-        if (error.message.includes('Invalid email')) {
-          return { 
-            error: { 
-              message: 'Nieprawidłowy format adresu email.' 
-            } 
-          };
-        }
-        if (error.message.includes('Password should be at least')) {
-          return { 
-            error: { 
-              message: 'Hasło musi mieć co najmniej 6 znaków.' 
-            } 
-          };
-        }
-        
-        return { error: { message: error.message } };
+      if (data?.user && !data?.session) {
+        return { 
+          success: true, 
+          message: 'Sprawdź swoją skrzynkę email i potwierdź rejestrację' 
+        };
       }
 
-      if (data?.user) {
-        console.log('User created successfully:', data.user.id);
-        console.log('Setting showSignupSuccess to true');
-        setShowSignupSuccess(true);
-        return { error: null, success: true };
-      }
-
-      return { error };
-    } catch (err: any) {
-      console.error('Signup exception:', err);
-      return { error: { message: err.message || 'Wystąpił nieoczekiwany błąd' } };
+      // Register for push notifications after successful registration
+      await PushNotificationService.registerForPushNotifications();
+      
+      return { success: true };
+    } catch (error: any) {
+      setError(error.message);
+      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
     }
   };
 
