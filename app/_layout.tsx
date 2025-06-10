@@ -13,11 +13,7 @@ import { AuthScreen } from "./auth/AuthScreen";
 import { MigrationScreen } from "./components/MigrationScreen";
 import { DataMigrationService } from "./utils/migration";
 import { View, Text } from "react-native";
-import { NotificationCenter } from './components/NotificationCenter';
 import { PushNotificationService } from './utils/pushNotifications';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { MigrationPrompt } from './components/MigrationPrompt';
-import { OnboardingModal } from './components/OnboardingModal';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -118,28 +114,16 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <StatusBar style="auto" />
-        <Stack
-          screenOptions={{
-            headerStyle: {
-              backgroundColor: '#4F46E5',
-            },
-            headerTintColor: '#fff',
-            headerTitleStyle: {
-              fontWeight: 'bold',
-            },
-            headerRight: () => <NotificationCenter />,
-          }}
-        >
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="auth/AuthScreen" options={{ headerShown: false }} />
-          <Stack.Screen name="migration/MigrationScreen" options={{ headerShown: false }} />
-          <Stack.Screen name="project/[id]" options={{ title: 'Projekt' }} />
-        </Stack>
-        <MigrationPrompt />
-        <OnboardingModal />
-      </GestureHandlerRootView>
+      <SafeAreaProvider>
+        <ThemeProvider value={DefaultTheme}>
+          <AppContent />
+          <StatusBar
+            style="light"
+            backgroundColor="#0A0B1E"
+            translucent={false}
+          />
+        </ThemeProvider>
+      </SafeAreaProvider>
     </AuthProvider>
   );
 }

@@ -15,6 +15,10 @@ import {
   Keyboard,
   Image,
   Alert,
+  Pressable,
+  ScrollView,
+  SafeAreaView,
+  Dimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import CustomToast from "./components/CustomToast";
@@ -23,21 +27,25 @@ import { Plus, Search, Filter, SortDesc, LogOut, User } from "lucide-react-nativ
 import ProjectCard from "./components/ProjectCard";
 import { useRouter, useFocusEffect } from "expo-router";
 import {
-  SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { StorageService, Project, generateUUID } from "./utils/storage";
 import { useAuth } from "./hooks/useAuth";
 import ConfirmDialog from "./components/ConfirmDialog";
-import NotificationCenter from "./components/NotificationCenter";
+import { NotificationCenter } from "./components/NotificationCenter";
 import { DeleteConfirmationModal } from "./components/DeleteConfirmationModal";
 import { OnboardingModal } from "./components/OnboardingModal";
+import { usePushNotifications } from "./hooks/usePushNotifications";
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, signOut, signOutGuest, isGuest, userProfile, needsOnboarding, setNeedsOnboarding } = useAuth();
   const { toastConfig, isVisible, showError, showSuccess, hideToast } = useToast();
+
+  // Initialize push notifications
+  usePushNotifications();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -341,17 +349,17 @@ export default function HomeScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0A0B1E" }}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0B1E" />
+    <View style={{ flex: 1, backgroundColor: "#0A0B1E", paddingTop: insets.top }}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A0B1E" translucent={false} />
 
       {/* Header with gradient and logo */}
       <LinearGradient
         colors={["#0A0B1E", "#151829"]}
         style={{ 
-          paddingTop: 8, 
-          paddingBottom: 0, 
+          paddingTop: 12, 
+          paddingBottom: 8, 
           paddingHorizontal: 16,
-          height: 100,
+          minHeight: 110,
           justifyContent: "center",
           alignItems: "center",
           position: "relative"
@@ -361,7 +369,7 @@ export default function HomeScreen() {
         {(user || isGuest) && (
           <View style={{
             position: "absolute",
-            top: 16,
+            top: 20,
             right: 16,
             zIndex: 10,
             alignItems: "flex-end"

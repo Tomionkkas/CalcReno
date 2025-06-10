@@ -6,9 +6,20 @@ export function usePushNotifications() {
   const { user } = useAuth();
 
   useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    
     // Setup notification listeners
-    const cleanup = PushNotificationService.setupNotificationListeners();
-    return cleanup;
+    try {
+      cleanup = PushNotificationService.setupNotificationListeners();
+    } catch (error) {
+      console.error('Failed to setup notification listeners:', error);
+    }
+    
+    return () => {
+      if (cleanup) {
+        cleanup();
+      }
+    };
   }, []);
 
   useEffect(() => {
