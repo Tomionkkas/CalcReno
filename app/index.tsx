@@ -892,6 +892,6 @@ export default function HomeScreen() {
         onCreateProject={handleOnboardingCreateProject}
         userName={userProfile?.firstName}
       />
-    </SafeAreaView>
+    </View>
   );
 }

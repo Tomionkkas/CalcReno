@@ -464,10 +464,12 @@ export function NotificationCenter() {
             <ScrollView
               style={{ flex: 1 }}
               contentContainerStyle={{ 
-                paddingBottom: isSmallScreen ? 20 : 32,
+                paddingBottom: isSmallScreen ? 40 : 50,
+                paddingTop: 8,
                 minHeight: isShortScreen ? '100%' : undefined,
               }}
               showsVerticalScrollIndicator={false}
+              contentInsetAdjustmentBehavior="automatic"
               refreshControl={
                 <RefreshControl 
                   refreshing={refreshing} 
