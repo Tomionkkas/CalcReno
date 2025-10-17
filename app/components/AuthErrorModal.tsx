@@ -7,15 +7,17 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AlertTriangle, X, Mail, Lock, RefreshCw, HelpCircle } from 'lucide-react-native';
+import { AlertTriangle, X, Mail, Lock, RefreshCw, HelpCircle, User } from 'lucide-react-native';
 
 interface AuthErrorModalProps {
   visible: boolean;
   onClose: () => void;
-  errorType: 'invalid_credentials' | 'user_exists' | 'invalid_email' | 'weak_password' | 'general' | null;
+  errorType: 'invalid_credentials' | 'account_not_found' | 'user_exists' | 'invalid_email' | 'weak_password' | 'general' | null;
   customMessage?: string;
   onResendEmail?: () => void;
   onResetPassword?: () => void;
+  onCreateAccount?: () => void;
+  email?: string;
 }
 
 const { height } = Dimensions.get('window');
@@ -26,7 +28,9 @@ export function AuthErrorModal({
   errorType, 
   customMessage,
   onResendEmail,
-  onResetPassword 
+  onResetPassword,
+  onCreateAccount,
+  email 
 }: AuthErrorModalProps) {
   const getErrorConfig = () => {
     switch (errorType) {
@@ -42,6 +46,21 @@ export function AuthErrorModal({
             'Spróbuj zresetować hasło jeśli go nie pamiętasz'
           ],
           showResetPassword: true
+        };
+
+      case 'account_not_found':
+        return {
+          title: 'Konto nie istnieje',
+          message: `Nie znaleziono konta z adresem ${email || 'podanym adresem email'}.\nMożesz utworzyć nowe konto lub sprawdzić adres email.`,
+          icon: Mail,
+          iconColor: '#F59E0B',
+          suggestions: [
+            'Sprawdź czy email został wpisany poprawnie',
+            'Upewnij się, że nie ma literówek w adresie',
+            'Spróbuj użyć innego adresu email',
+            'Utwórz nowe konto jeśli nie masz jeszcze konta'
+          ],
+          showCreateAccount: true
         };
       case 'user_exists':
         return {
@@ -96,7 +115,9 @@ export function AuthErrorModal({
     }
   };
 
-  if (!visible || !errorType) return null;
+  if (!visible || !errorType) {
+    return null;
+  }
 
   const config = getErrorConfig();
 
@@ -237,7 +258,7 @@ export function AuthErrorModal({
           {/* Action Buttons */}
           <View style={{ width: '100%' }}>
             {/* Primary Actions */}
-            {(config.showResendEmail || config.showResetPassword) && (
+            {(config.showResendEmail || config.showResetPassword || config.showCreateAccount) && (
               <View style={{
                 flexDirection: 'row',
                 gap: 12,
@@ -272,6 +293,40 @@ export function AuthErrorModal({
                         fontWeight: '600',
                       }}>
                         Wyślij ponownie
+                      </Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+
+                {config.showCreateAccount && onCreateAccount && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      onClose();
+                      onCreateAccount();
+                    }}
+                    style={{
+                      flex: 1,
+                      borderRadius: 12,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <LinearGradient
+                      colors={['#6C63FF', '#4DABF7']}
+                      style={{
+                        paddingVertical: 14,
+                        paddingHorizontal: 20,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                      }}
+                    >
+                      <User size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+                      <Text style={{
+                        color: '#FFFFFF',
+                        fontSize: 14,
+                        fontWeight: '600',
+                      }}>
+                        Utwórz konto
                       </Text>
                     </LinearGradient>
                   </TouchableOpacity>

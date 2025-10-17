@@ -26,7 +26,7 @@ export function getRectangleWalls(dimensions: RoomDimensions): WallInfo[] {
   return [
     {
       id: 0,
-      name: "Ściana północna (góra)",
+      name: "Ściana 1",
       length: width,
       startPoint: { x: 0, y: 0 },
       endPoint: { x: width, y: 0 },
@@ -34,7 +34,7 @@ export function getRectangleWalls(dimensions: RoomDimensions): WallInfo[] {
     },
     {
       id: 1,
-      name: "Ściana wschodnia (prawa)",
+      name: "Ściana 2",
       length: length,
       startPoint: { x: width, y: 0 },
       endPoint: { x: width, y: length },
@@ -42,7 +42,7 @@ export function getRectangleWalls(dimensions: RoomDimensions): WallInfo[] {
     },
     {
       id: 2,
-      name: "Ściana południowa (dół)",
+      name: "Ściana 3",
       length: width,
       startPoint: { x: width, y: length },
       endPoint: { x: 0, y: length },
@@ -50,7 +50,7 @@ export function getRectangleWalls(dimensions: RoomDimensions): WallInfo[] {
     },
     {
       id: 3,
-      name: "Ściana zachodnia (lewa)",
+      name: "Ściana 4",
       length: length,
       startPoint: { x: 0, y: length },
       endPoint: { x: 0, y: 0 },
@@ -73,55 +73,47 @@ export function getLShapeWalls(
       return [
         {
           id: 0,
-          name: "Ściana północna lewa",
-          length: width,
+          name: "Ściana 1",
+          length: width + width2,
           startPoint: { x: 0, y: 0 },
-          endPoint: { x: width, y: 0 },
-          direction: 'horizontal'
-        },
-        {
-          id: 1,
-          name: "Ściana północna prawa",
-          length: width2,
-          startPoint: { x: width, y: 0 },
           endPoint: { x: width + width2, y: 0 },
           direction: 'horizontal'
         },
         {
-          id: 2,
-          name: "Ściana wschodnia",
+          id: 1,
+          name: "Ściana 2",
           length: length2,
           startPoint: { x: width + width2, y: 0 },
           endPoint: { x: width + width2, y: length2 },
           direction: 'vertical'
         },
         {
-          id: 3,
-          name: "Ściana środkowa pozioma",
+          id: 2,
+          name: "Ściana 3",
           length: width2,
           startPoint: { x: width + width2, y: length2 },
           endPoint: { x: width, y: length2 },
           direction: 'horizontal'
         },
         {
-          id: 4,
-          name: "Ściana środkowa pionowa",
+          id: 3,
+          name: "Ściana 4",
           length: length - length2,
           startPoint: { x: width, y: length2 },
           endPoint: { x: width, y: length },
           direction: 'vertical'
         },
         {
-          id: 5,
-          name: "Ściana południowa",
+          id: 4,
+          name: "Ściana 5",
           length: width,
           startPoint: { x: width, y: length },
           endPoint: { x: 0, y: length },
           direction: 'horizontal'
         },
         {
-          id: 6,
-          name: "Ściana zachodnia",
+          id: 5,
+          name: "Ściana 6",
           length: length,
           startPoint: { x: 0, y: length },
           endPoint: { x: 0, y: 0 },
@@ -133,55 +125,47 @@ export function getLShapeWalls(
       return [
         {
           id: 0,
-          name: "Ściana północna lewa",
-          length: width2,
+          name: "Ściana 1",
+          length: width2 + width,
           startPoint: { x: 0, y: 0 },
-          endPoint: { x: width2, y: 0 },
-          direction: 'horizontal'
-        },
-        {
-          id: 1,
-          name: "Ściana północna prawa",
-          length: width,
-          startPoint: { x: width2, y: 0 },
           endPoint: { x: width2 + width, y: 0 },
           direction: 'horizontal'
         },
         {
-          id: 2,
-          name: "Ściana wschodnia",
+          id: 1,
+          name: "Ściana 2",
           length: length,
           startPoint: { x: width2 + width, y: 0 },
           endPoint: { x: width2 + width, y: length },
           direction: 'vertical'
         },
         {
-          id: 3,
-          name: "Ściana południowa",
+          id: 2,
+          name: "Ściana 3",
           length: width,
           startPoint: { x: width2 + width, y: length },
           endPoint: { x: width2, y: length },
           direction: 'horizontal'
         },
         {
-          id: 4,
-          name: "Ściana środkowa pionowa",
+          id: 3,
+          name: "Ściana 4",
           length: length - length2,
           startPoint: { x: width2, y: length },
           endPoint: { x: width2, y: length2 },
           direction: 'vertical'
         },
         {
-          id: 5,
-          name: "Ściana środkowa pozioma",
+          id: 4,
+          name: "Ściana 5",
           length: width2,
           startPoint: { x: width2, y: length2 },
           endPoint: { x: 0, y: length2 },
           direction: 'horizontal'
         },
         {
-          id: 6,
-          name: "Ściana zachodnia",
+          id: 5,
+          name: "Ściana 6",
           length: length2,
           startPoint: { x: 0, y: length2 },
           endPoint: { x: 0, y: 0 },
@@ -193,7 +177,7 @@ export function getLShapeWalls(
       return [
         {
           id: 0,
-          name: "Ściana północna",
+          name: "Ściana 1",
           length: width,
           startPoint: { x: 0, y: 0 },
           endPoint: { x: width, y: 0 },
@@ -201,7 +185,7 @@ export function getLShapeWalls(
         },
         {
           id: 1,
-          name: "Ściana środkowa pionowa",
+          name: "Ściana 2",
           length: length - length2,
           startPoint: { x: width, y: 0 },
           endPoint: { x: width, y: length - length2 },
@@ -209,7 +193,7 @@ export function getLShapeWalls(
         },
         {
           id: 2,
-          name: "Ściana środkowa pozioma",
+          name: "Ściana 3",
           length: width2,
           startPoint: { x: width, y: length - length2 },
           endPoint: { x: width + width2, y: length - length2 },
@@ -217,7 +201,7 @@ export function getLShapeWalls(
         },
         {
           id: 3,
-          name: "Ściana wschodnia",
+          name: "Ściana 4",
           length: length2,
           startPoint: { x: width + width2, y: length - length2 },
           endPoint: { x: width + width2, y: length },
@@ -225,23 +209,15 @@ export function getLShapeWalls(
         },
         {
           id: 4,
-          name: "Ściana południowa prawa",
-          length: width2,
+          name: "Ściana 5",
+          length: width + width2,
           startPoint: { x: width + width2, y: length },
-          endPoint: { x: width, y: length },
-          direction: 'horizontal'
-        },
-        {
-          id: 5,
-          name: "Ściana południowa lewa",
-          length: width,
-          startPoint: { x: width, y: length },
           endPoint: { x: 0, y: length },
           direction: 'horizontal'
         },
         {
-          id: 6,
-          name: "Ściana zachodnia",
+          id: 5,
+          name: "Ściana 6",
           length: length,
           startPoint: { x: 0, y: length },
           endPoint: { x: 0, y: 0 },
@@ -253,7 +229,7 @@ export function getLShapeWalls(
       return [
         {
           id: 0,
-          name: "Ściana północna",
+          name: "Ściana 1",
           length: width,
           startPoint: { x: width2, y: 0 },
           endPoint: { x: width2 + width, y: 0 },
@@ -261,7 +237,7 @@ export function getLShapeWalls(
         },
         {
           id: 1,
-          name: "Ściana wschodnia",
+          name: "Ściana 2",
           length: length,
           startPoint: { x: width2 + width, y: 0 },
           endPoint: { x: width2 + width, y: length },
@@ -269,42 +245,34 @@ export function getLShapeWalls(
         },
         {
           id: 2,
-          name: "Ściana południowa prawa",
-          length: width,
+          name: "Ściana 3",
+          length: width2 + width,
           startPoint: { x: width2 + width, y: length },
-          endPoint: { x: width2, y: length },
-          direction: 'horizontal'
-        },
-        {
-          id: 3,
-          name: "Ściana środkowa pionowa",
-          length: length - length2,
-          startPoint: { x: width2, y: length },
-          endPoint: { x: width2, y: length2 },
-          direction: 'vertical'
-        },
-        {
-          id: 4,
-          name: "Ściana południowa lewa",
-          length: width2,
-          startPoint: { x: width2, y: length2 },
-          endPoint: { x: 0, y: length2 },
-          direction: 'horizontal'
-        },
-        {
-          id: 5,
-          name: "Ściana środkowa pozioma",
-          length: width2,
-          startPoint: { x: 0, y: length2 },
           endPoint: { x: 0, y: length },
           direction: 'horizontal'
         },
         {
-          id: 6,
-          name: "Ściana zachodnia",
+          id: 3,
+          name: "Ściana 4",
           length: length2,
           startPoint: { x: 0, y: length },
-          endPoint: { x: 0, y: 0 },
+          endPoint: { x: 0, y: length - length2 },
+          direction: 'vertical'
+        },
+        {
+          id: 4,
+          name: "Ściana 5",
+          length: width2,
+          startPoint: { x: 0, y: length - length2 },
+          endPoint: { x: width2, y: length - length2 },
+          direction: 'horizontal'
+        },
+        {
+          id: 5,
+          name: "Ściana 6",
+          length: length - length2,
+          startPoint: { x: width2, y: length - length2 },
+          endPoint: { x: width2, y: 0 },
           direction: 'vertical'
         }
       ];
@@ -322,7 +290,7 @@ export function getWallsForShape(
   if (shape === "rectangle") {
     return getRectangleWalls(dimensions);
   } else {
-    return getLShapeWalls(dimensions, corner || "top-right");
+    return getLShapeWalls(dimensions, corner || "bottom-left");
   }
 }
 

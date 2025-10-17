@@ -76,9 +76,153 @@ export const StorageService = {
     try {
       const key = this.getStorageKey(isGuest, userId);
       const data = await AsyncStorage.getItem(key);
-      return data ? JSON.parse(data) : [];
+      const localProjects = data ? JSON.parse(data) : [];
+      
+      // If user is logged in (not guest) and has no local projects, try to sync from database
+      if (!isGuest && userId && localProjects.length === 0) {
+        console.log('No local projects found for logged in user, syncing from database...');
+        const syncedProjects = await this.syncProjectsFromDatabase(userId);
+        if (syncedProjects.length > 0) {
+          // Save synced projects locally
+          await this.saveProjects(syncedProjects, isGuest, userId);
+          return syncedProjects;
+        }
+      }
+      
+      return localProjects;
     } catch (error) {
       console.error("Error loading projects:", error);
+      return [];
+    }
+  },
+
+  async syncProjectsFromDatabase(userId: string): Promise<Project[]> {
+    try {
+      console.log('Syncing projects from database for user:', userId);
+      
+      // Fetch projects from Supabase
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('calcreno_projects')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (projectsError) {
+        console.error('Error fetching projects from database:', projectsError);
+        return [];
+      }
+
+      if (!projectsData || projectsData.length === 0) {
+        console.log('No projects found in database for user');
+        return [];
+      }
+
+      console.log(`Found ${projectsData.length} projects in database`);
+
+      // Convert database format to app format
+      const projects: Project[] = [];
+      
+      for (const dbProject of projectsData) {
+        // Fetch rooms for this project
+        const { data: roomsData, error: roomsError } = await supabase
+          .from('calcreno_rooms')
+          .select('*')
+          .eq('project_id', dbProject.id)
+          .order('created_at', { ascending: true });
+
+        const rooms: Room[] = [];
+        
+        if (!roomsError && roomsData) {
+          for (const dbRoom of roomsData) {
+            // Fetch elements for this room
+            const { data: elementsData, error: elementsError } = await supabase
+              .from('calcreno_room_elements')
+              .select('*')
+              .eq('room_id', dbRoom.id)
+              .order('created_at', { ascending: true });
+
+            const elements: RoomElement[] = [];
+            
+            if (!elementsError && elementsData) {
+              for (const dbElement of elementsData) {
+                // Parse wall and position from notes if available
+                const notesMatch = dbElement.notes?.match(/Wall (\d+), Position (\d+)/);
+                const wall = notesMatch ? parseInt(notesMatch[1]) : 1;
+                const position = notesMatch ? parseInt(notesMatch[2]) : 0;
+                
+                // Approximate width and height from area_sqm (assuming square elements)
+                const area = dbElement.area_sqm || 1;
+                const dimension = Math.sqrt(area);
+                
+                elements.push({
+                  id: dbElement.id,
+                  type: dbElement.element_type as "door" | "window",
+                  width: dimension,
+                  height: dimension,
+                  position: position,
+                  wall: wall,
+                });
+              }
+            }
+
+            // Convert area back to approximate dimensions
+            const area = dbRoom.area_sqm || 16; // Default 4x4 room
+            const side = Math.sqrt(area);
+            
+            // Determine shape from description
+            const shape = dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle';
+            
+            rooms.push({
+              id: dbRoom.id,
+              name: dbRoom.name,
+              shape: shape as "rectangle" | "l-shape",
+              dimensions: {
+                width: side,
+                height: side,
+                // For L-shape, use half dimensions for additional area
+                ...(shape === 'l-shape' && {
+                  mainWidth: side,
+                  mainHeight: side,
+                  additionalWidth: side / 2,
+                  additionalHeight: side / 2,
+                })
+              },
+              elements,
+              corner: shape === 'l-shape' ? 'bottom-left' : undefined,
+            });
+          }
+        }
+
+        projects.push({
+          id: dbProject.id,
+          name: dbProject.name,
+          description: dbProject.description || undefined,
+          status: dbProject.status as any,
+          startDate: new Date().toISOString().split("T")[0], // Default to today
+          endDate: new Date().toISOString().split("T")[0], // Default to today
+          isPinned: false, // Default to not pinned
+          totalCost: 0, // Default to 0 cost
+          rooms,
+        });
+      }
+
+      console.log(`Successfully converted ${projects.length} projects from database`);
+      return projects;
+    } catch (error) {
+      console.error('Error syncing projects from database:', error);
+      return [];
+    }
+  },
+
+  async forceSyncFromDatabase(userId: string): Promise<Project[]> {
+    try {
+      const projects = await this.syncProjectsFromDatabase(userId);
+      if (projects.length > 0) {
+        await this.saveProjects(projects, false, userId);
+      }
+      return projects;
+    } catch (error) {
+      console.error('Error force syncing from database:', error);
       return [];
     }
   },
@@ -113,10 +257,7 @@ export const StorageService = {
             name: project.name,
             description: project.description,
             status: project.status,
-            start_date: project.startDate,
-            end_date: project.endDate,
-            is_pinned: project.isPinned,
-            total_cost: project.totalCost,
+            project_type: 'renovation', // Default project type
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
@@ -148,32 +289,157 @@ export const StorageService = {
       try {
         console.log('Updating project in database:', updatedProject.id);
         
-        // Update in Supabase database
-        const { error } = await supabase
+        // Update project in Supabase database
+        const { error: projectError } = await supabase
           .from('calcreno_projects')
           .update({
             name: updatedProject.name,
             description: updatedProject.description,
             status: updatedProject.status,
-            start_date: updatedProject.startDate,
-            end_date: updatedProject.endDate,
-            is_pinned: updatedProject.isPinned,
-            total_cost: updatedProject.totalCost,
             updated_at: new Date().toISOString(),
           })
           .eq('id', updatedProject.id)
           .eq('user_id', userId);
 
-        if (error) {
-          console.error('Failed to update project in database:', error);
-          // Don't throw error - local update already completed
+        if (projectError) {
+          console.error('Failed to update project in database:', projectError);
         } else {
           console.log('Project successfully updated in database');
+          
+          // Sync rooms and elements
+          await this.syncRoomsToDatabase(updatedProject.id, updatedProject.rooms);
         }
       } catch (error) {
         console.error('Error updating project in database:', error);
         // Don't throw error - local update already completed
       }
+    }
+  },
+
+  async syncRoomsToDatabase(projectId: string, rooms: Room[]): Promise<void> {
+    try {
+      // First, get existing rooms from database
+      const { data: existingRooms, error: fetchError } = await supabase
+        .from('calcreno_rooms')
+        .select('id')
+        .eq('project_id', projectId);
+
+      if (fetchError) {
+        console.error('Error fetching existing rooms:', fetchError);
+        return;
+      }
+
+      const existingRoomIds = existingRooms?.map(r => r.id) || [];
+      const currentRoomIds = rooms.map(r => r.id);
+
+      // Delete rooms that no longer exist
+      const roomsToDelete = existingRoomIds.filter(id => !currentRoomIds.includes(id));
+      if (roomsToDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('calcreno_rooms')
+          .delete()
+          .in('id', roomsToDelete);
+        
+        if (deleteError) {
+          console.error('Error deleting rooms:', deleteError);
+        }
+      }
+
+      // Upsert current rooms
+      for (const room of rooms) {
+        // Calculate area from dimensions
+        let area_sqm = 0;
+        if (room.dimensions) {
+          if (room.shape === 'rectangle') {
+            area_sqm = room.dimensions.width * room.dimensions.height;
+          } else if (room.shape === 'l-shape' && room.dimensions.mainWidth && room.dimensions.mainHeight) {
+            area_sqm = (room.dimensions.mainWidth * room.dimensions.mainHeight) + 
+                      (room.dimensions.additionalWidth * room.dimensions.additionalHeight);
+          }
+        }
+
+        const { error: roomError } = await supabase
+          .from('calcreno_rooms')
+          .upsert({
+            id: room.id,
+            project_id: projectId,
+            name: room.name,
+            room_type: 'general', // Default room type
+            area_sqm: area_sqm,
+            height_m: 2.5, // Default height
+            description: `${room.shape} room`, // Basic description
+            updated_at: new Date().toISOString(),
+          });
+
+        if (roomError) {
+          console.error(`Error upserting room ${room.id}:`, roomError);
+          continue;
+        }
+
+        // Sync room elements
+        await this.syncElementsToDatabase(room.id, room.elements);
+      }
+    } catch (error) {
+      console.error('Error syncing rooms to database:', error);
+    }
+  },
+
+  async syncElementsToDatabase(roomId: string, elements: RoomElement[]): Promise<void> {
+    try {
+      // First, get existing elements from database
+      const { data: existingElements, error: fetchError } = await supabase
+        .from('calcreno_room_elements')
+        .select('id')
+        .eq('room_id', roomId);
+
+      if (fetchError) {
+        console.error('Error fetching existing elements:', fetchError);
+        return;
+      }
+
+      const existingElementIds = existingElements?.map(e => e.id) || [];
+      const currentElementIds = elements.map(e => e.id);
+
+      // Delete elements that no longer exist
+      const elementsToDelete = existingElementIds.filter(id => !currentElementIds.includes(id));
+      if (elementsToDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('calcreno_room_elements')
+          .delete()
+          .in('id', elementsToDelete);
+        
+        if (deleteError) {
+          console.error('Error deleting elements:', deleteError);
+        }
+      }
+
+      // Upsert current elements
+      for (const element of elements) {
+        // Calculate area and cost for the element
+        const area_sqm = (element.width || 1) * (element.height || 1);
+        const unit_cost = element.type === 'door' ? 500 : 200; // Default costs
+        const total_cost = area_sqm * unit_cost;
+
+        const { error: elementError } = await supabase
+          .from('calcreno_room_elements')
+          .upsert({
+            id: element.id,
+            room_id: roomId,
+            element_type: element.type,
+            material: element.type === 'door' ? 'wood' : 'glass', // Default materials
+            area_sqm: area_sqm,
+            unit_cost: unit_cost,
+            total_cost: total_cost,
+            notes: `Wall ${element.wall || 1}, Position ${element.position || 0}`,
+            updated_at: new Date().toISOString(),
+          });
+
+        if (elementError) {
+          console.error(`Error upserting element ${element.id}:`, elementError);
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing elements to database:', error);
     }
   },
 
@@ -219,6 +485,18 @@ export const StorageService = {
       await AsyncStorage.removeItem(GUEST_PROJECTS_KEY);
     } catch (error) {
       console.error("Error clearing guest data:", error);
+    }
+  },
+
+  async clearUserData(userId?: string): Promise<void> {
+    try {
+      if (userId) {
+        const key = this.getStorageKey(false, userId);
+        await AsyncStorage.removeItem(key);
+        console.log('Cleared local data for user:', userId);
+      }
+    } catch (error) {
+      console.error("Error clearing user data:", error);
     }
   },
 };

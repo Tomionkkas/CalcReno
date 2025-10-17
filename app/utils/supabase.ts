@@ -2,10 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
-const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || 'YOUR_SUPABASE_URL_HERE';
-const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || 'YOUR_SUPABASE_ANON_KEY_HERE';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || Constants.expoConfig?.extra?.supabaseUrl || 'YOUR_SUPABASE_URL_HERE';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || Constants.expoConfig?.extra?.supabaseAnonKey || 'YOUR_SUPABASE_ANON_KEY_HERE';
 
-// Generated Database types from Supabase
+// Generated Database types from RenoWorld Supabase Project
 export type Json =
   | string
   | number
@@ -15,106 +15,99 @@ export type Json =
   | Json[]
 
 export type Database = {
-  public: {
+  calcreno_schema: {
     Tables: {
       calcreno_projects: {
         Row: {
-          created_at: string | null
-          currency: string | null
-          description: string | null
-          end_date: string | null
           id: string
-          is_completed: boolean | null
-          is_pinned: boolean | null
-          local_id: string | null
-          metadata: Json | null
-          name: string
-          start_date: string | null
-          status: string | null
-          total_area: number | null
-          total_budget: number | null
-          total_cost: number | null
-          updated_at: string | null
           user_id: string | null
+          name: string
+          description: string | null
+          property_address: string | null
+          total_area: number | null
+          project_type: string | null
+          budget_limit: number | null
+          timeline_months: number | null
+          status: string | null
+          is_exported_to_timeline: boolean | null
+          timeline_project_id: string | null
+          created_at: string | null
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string | null
-          currency?: string | null
-          description?: string | null
-          end_date?: string | null
           id?: string
-          is_completed?: boolean | null
-          is_pinned?: boolean | null
-          local_id?: string | null
-          metadata?: Json | null
-          name: string
-          start_date?: string | null
-          status?: string | null
-          total_area?: number | null
-          total_budget?: number | null
-          total_cost?: number | null
-          updated_at?: string | null
           user_id?: string | null
+          name: string
+          description?: string | null
+          property_address?: string | null
+          total_area?: number | null
+          project_type?: string | null
+          budget_limit?: number | null
+          timeline_months?: number | null
+          status?: string | null
+          is_exported_to_timeline?: boolean | null
+          timeline_project_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string | null
-          currency?: string | null
-          description?: string | null
-          end_date?: string | null
           id?: string
-          is_completed?: boolean | null
-          is_pinned?: boolean | null
-          local_id?: string | null
-          metadata?: Json | null
-          name?: string
-          start_date?: string | null
-          status?: string | null
-          total_area?: number | null
-          total_budget?: number | null
-          total_cost?: number | null
-          updated_at?: string | null
           user_id?: string | null
+          name?: string
+          description?: string | null
+          property_address?: string | null
+          total_area?: number | null
+          project_type?: string | null
+          budget_limit?: number | null
+          timeline_months?: number | null
+          status?: string | null
+          is_exported_to_timeline?: boolean | null
+          timeline_project_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "calcreno_projects_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       calcreno_rooms: {
         Row: {
-          area: number | null
-          corner: string | null
-          created_at: string | null
-          dimensions: Json | null
           id: string
-          local_id: string | null
-          metadata: Json | null
-          name: string
           project_id: string | null
-          shape: string | null
+          name: string
+          room_type: string
+          area_sqm: number
+          height_m: number | null
+          description: string | null
+          created_at: string | null
           updated_at: string | null
         }
         Insert: {
-          area?: number | null
-          corner?: string | null
-          created_at?: string | null
-          dimensions?: Json | null
           id?: string
-          local_id?: string | null
-          metadata?: Json | null
-          name: string
           project_id?: string | null
-          shape?: string | null
+          name: string
+          room_type: string
+          area_sqm: number
+          height_m?: number | null
+          description?: string | null
+          created_at?: string | null
           updated_at?: string | null
         }
         Update: {
-          area?: number | null
-          corner?: string | null
-          created_at?: string | null
-          dimensions?: Json | null
           id?: string
-          local_id?: string | null
-          metadata?: Json | null
-          name?: string
           project_id?: string | null
-          shape?: string | null
+          name?: string
+          room_type?: string
+          area_sqm?: number
+          height_m?: number | null
+          description?: string | null
+          created_at?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -127,43 +120,43 @@ export type Database = {
           }
         ]
       }
-      calcreno_room_elements: {
-        Row: {
-          created_at: string | null
-          height: number
-          id: string
-          local_id: string | null
-          position: number
-          room_id: string | null
-          type: string
-          updated_at: string | null
-          wall: number
-          width: number
-        }
-        Insert: {
-          created_at?: string | null
-          height: number
-          id?: string
-          local_id?: string | null
-          position: number
-          room_id?: string | null
-          type: string
-          updated_at?: string | null
-          wall: number
-          width: number
-        }
-        Update: {
-          created_at?: string | null
-          height?: number
-          id?: string
-          local_id?: string | null
-          position?: number
-          room_id?: string | null
-          type?: string
-          updated_at?: string | null
-          wall?: number
-          width?: number
-        }
+        calcreno_room_elements: {
+          Row: {
+            id: string
+            room_id: string | null
+            element_type: string
+            material: string
+            area_sqm: number
+            unit_cost: number
+            total_cost: number
+            notes: string | null
+            created_at: string | null
+            updated_at: string | null
+          }
+          Insert: {
+            id?: string
+            room_id?: string | null
+            element_type: string
+            material: string
+            area_sqm: number
+            unit_cost: number
+            total_cost: number
+            notes?: string | null
+            created_at?: string | null
+            updated_at?: string | null
+          }
+          Update: {
+            id?: string
+            room_id?: string | null
+            element_type?: string
+            material?: string
+            area_sqm?: number
+            unit_cost?: number
+            total_cost?: number
+            notes?: string | null
+            created_at?: string | null
+            updated_at?: string | null
+          }
         Relationships: [
           {
             foreignKeyName: "calcreno_room_elements_room_id_fkey"
@@ -174,104 +167,646 @@ export type Database = {
           }
         ]
       }
-      cross_app_notifications: {
+      project_exports: {
         Row: {
-          created_at: string | null
-          data: Json | null
-          expires_at: string | null
           id: string
-          is_read: boolean | null
-          message: string
-          notification_type: string
-          source_app: string
-          target_app: string
-          title: string
-          user_id: string | null
+          project_id: string | null
+          export_status: string | null
+          timeline_project_id: string | null
+          export_data: Json
+          error_message: string | null
+          created_at: string | null
+          completed_at: string | null
         }
         Insert: {
-          created_at?: string | null
-          data?: Json | null
-          expires_at?: string | null
           id?: string
-          is_read?: boolean | null
-          message: string
-          notification_type: string
-          source_app: string
-          target_app: string
-          title: string
-          user_id?: string | null
+          project_id?: string | null
+          export_status?: string | null
+          timeline_project_id?: string | null
+          export_data: Json
+          error_message?: string | null
+          created_at?: string | null
+          completed_at?: string | null
         }
         Update: {
-          created_at?: string | null
-          data?: Json | null
-          expires_at?: string | null
           id?: string
-          is_read?: boolean | null
-          message?: string
-          notification_type?: string
-          source_app?: string
-          target_app?: string
-          title?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      project_links: {
-        Row: {
-          calcreno_project_id: string | null
-          created_at: string | null
-          id: string
-          renotimeline_project_id: string | null
-          user_id: string | null
-        }
-        Insert: {
-          calcreno_project_id?: string | null
+          project_id?: string | null
+          export_status?: string | null
+          timeline_project_id?: string | null
+          export_data?: Json
+          error_message?: string | null
           created_at?: string | null
-          id?: string
-          renotimeline_project_id?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          calcreno_project_id?: string | null
-          created_at?: string | null
-          id?: string
-          renotimeline_project_id?: string | null
-          user_id?: string | null
+          completed_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "project_links_calcreno_project_id_fkey"
-            columns: ["calcreno_project_id"]
+            foreignKeyName: "project_exports_project_id_fkey"
+            columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "calcreno_projects"
             referencedColumns: ["id"]
           }
         ]
       }
-      user_profiles: {
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  shared_schema: {
+    Tables: {
+      profiles: {
         Row: {
-          created_at: string | null
-          first_name: string | null
           id: string
-          last_name: string | null
+          email: string
+          full_name: string | null
+          avatar_url: string | null
+          phone: string | null
+          preferences: Json | null
+          expertise: string[] | null
+          created_at: string | null
           updated_at: string | null
-          user_id: string | null
+          first_name: string | null
+          last_name: string | null
         }
         Insert: {
+          id: string
+          email: string
+          full_name?: string | null
+          avatar_url?: string | null
+          phone?: string | null
+          preferences?: Json | null
+          expertise?: string[] | null
           created_at?: string | null
-          first_name?: string | null
-          id?: string
-          last_name?: string | null
           updated_at?: string | null
-          user_id?: string | null
+          first_name?: string | null
+          last_name?: string | null
         }
         Update: {
-          created_at?: string | null
-          first_name?: string | null
           id?: string
-          last_name?: string | null
+          email?: string
+          full_name?: string | null
+          avatar_url?: string | null
+          phone?: string | null
+          preferences?: Json | null
+          expertise?: string[] | null
+          created_at?: string | null
           updated_at?: string | null
+          first_name?: string | null
+          last_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      app_preferences: {
+        Row: {
+          id: string
+          user_id: string | null
+          app_name: string
+          preferences: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
           user_id?: string | null
+          app_name: string
+          preferences?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          app_name?: string
+          preferences?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      cross_app_notifications: {
+        Row: {
+          id: string
+          user_id: string | null
+          from_app: string
+          to_app: string
+          notification_type: string
+          title: string
+          message: string
+          data: Json | null
+          is_read: boolean | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          from_app: string
+          to_app: string
+          notification_type: string
+          title: string
+          message: string
+          data?: Json | null
+          is_read?: boolean | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          from_app?: string
+          to_app?: string
+          notification_type?: string
+          title?: string
+          message?: string
+          data?: Json | null
+          is_read?: boolean | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cross_app_notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      user_push_tokens: {
+        Row: {
+          id: string
+          user_id: string | null
+          app_name: string
+          push_token: string
+          device_type: string | null
+          is_active: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          app_name: string
+          push_token: string
+          device_type?: string | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          app_name?: string
+          push_token?: string
+          device_type?: string | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_push_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      user_roles: {
+        Row: {
+          user_id: string
+          project_id: string
+          app_name: string
+          role: string
+          created_at: string | null
+        }
+        Insert: {
+          user_id: string
+          project_id: string
+          app_name: string
+          role: string
+          created_at?: string | null
+        }
+        Update: {
+          user_id?: string
+          project_id?: string
+          app_name?: string
+          role?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      audit_log: {
+        Row: {
+          id: string
+          user_id: string | null
+          app_name: string
+          action: string
+          resource_type: string | null
+          resource_id: string | null
+          details: Json | null
+          ip_address: string | null
+          user_agent: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          app_name: string
+          action: string
+          resource_type?: string | null
+          resource_id?: string | null
+          details?: Json | null
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          app_name?: string
+          action?: string
+          resource_type?: string | null
+          resource_id?: string | null
+          details?: Json | null
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      guest_sessions: {
+        Row: {
+          id: string
+          session_token: string
+          app_name: string
+          data: Json | null
+          expires_at: string
+          is_active: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          session_token: string
+          app_name: string
+          data?: Json | null
+          expires_at: string
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          session_token?: string
+          app_name?: string
+          data?: Json | null
+          expires_at?: string
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  shared_schema: {
+    Tables: {
+      profiles: {
+        Row: {
+          id: string
+          first_name: string | null
+          last_name: string | null
+          email: string | null
+          avatar_url: string | null
+          created_at: string
+          updated_at: string
+          expertise: string | null
+          timezone: string | null
+          language: string | null
+          theme: string | null
+          notification_preferences: Json | null
+        }
+        Insert: {
+          id?: string
+          first_name?: string | null
+          last_name?: string | null
+          email?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          updated_at?: string
+          expertise?: string | null
+          timezone?: string | null
+          language?: string | null
+          theme?: string | null
+          notification_preferences?: Json | null
+        }
+        Update: {
+          id?: string
+          first_name?: string | null
+          last_name?: string | null
+          email?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          updated_at?: string
+          expertise?: string | null
+          timezone?: string | null
+          language?: string | null
+          theme?: string | null
+          notification_preferences?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      app_preferences: {
+        Row: {
+          id: string
+          user_id: string | null
+          app_name: string
+          preferences: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          app_name: string
+          preferences?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          app_name?: string
+          preferences?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      user_push_tokens: {
+        Row: {
+          id: string
+          user_id: string | null
+          push_token: string
+          platform: string
+          app_name: string
+          device_name: string | null
+          is_active: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          push_token: string
+          platform: string
+          app_name: string
+          device_name?: string | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          push_token?: string
+          platform?: string
+          app_name?: string
+          device_name?: string | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_push_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          user_id: string | null
+          project_id: string
+          role: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          project_id: string
+          role: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          project_id?: string
+          role?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      cross_app_notifications: {
+        Row: {
+          id: string
+          user_id: string | null
+          app_name: string
+          title: string
+          message: string
+          type: string | null
+          read: boolean | null
+          data: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          app_name: string
+          title: string
+          message: string
+          type?: string | null
+          read?: boolean | null
+          data?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          app_name?: string
+          title?: string
+          message?: string
+          type?: string | null
+          read?: boolean | null
+          data?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cross_app_notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      audit_log: {
+        Row: {
+          id: string
+          user_id: string | null
+          action: string
+          table_name: string
+          record_id: string | null
+          old_values: Json | null
+          new_values: Json | null
+          ip_address: string | null
+          user_agent: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          action: string
+          table_name: string
+          record_id?: string | null
+          old_values?: Json | null
+          new_values?: Json | null
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          action?: string
+          table_name?: string
+          record_id?: string | null
+          old_values?: Json | null
+          new_values?: Json | null
+          ip_address?: string | null
+          user_agent?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      guest_sessions: {
+        Row: {
+          id: string
+          session_id: string
+          user_agent: string | null
+          ip_address: string | null
+          created_at: string
+          expires_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          user_agent?: string | null
+          ip_address?: string | null
+          created_at?: string
+          expires_at: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          user_agent?: string | null
+          ip_address?: string | null
+          created_at?: string
+          expires_at?: string
         }
         Relationships: []
       }
@@ -291,6 +826,7 @@ export type Database = {
   }
 }
 
+// Create Supabase client with proper schema configuration
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: AsyncStorage,
@@ -298,4 +834,42 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
+  db: {
+    schema: 'calcreno_schema', // Default schema for CalcReno operations
+  },
+});
+
+// Shared schema client for cross-app operations
+export const sharedSupabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+  db: {
+    schema: 'shared_schema', // For cross-app operations
+  },
+});
+
+// Edge Functions client (no schema override - needed for function calls)
+export const functionsSupabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+  // No schema override - Edge Functions need default access
+});
+
+// Global auth error handler
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'TOKEN_REFRESHED' && !session) {
+    console.log('Global: Token refresh failed, clearing session');
+    // Clear any invalid session data
+    supabase.auth.signOut().catch(() => {
+      // Ignore errors
+    });
+  }
 }); 

@@ -165,9 +165,9 @@ export class PushNotificationService {
     });
 
     return () => {
-      Notifications.removeNotificationSubscription(notificationListener);
-      Notifications.removeNotificationSubscription(responseListener);
-      Notifications.removeNotificationSubscription(backgroundListener);
+      notificationListener.remove();
+      responseListener.remove();
+      backgroundListener.remove();
     };
   }
 
@@ -175,6 +175,28 @@ export class PushNotificationService {
   static async clearAllNotifications() {
     await Notifications.dismissAllNotificationsAsync();
     await Notifications.setBadgeCountAsync(0);
+  }
+
+  // Clear only RenoTimeline notifications
+  static async clearRenoTimelineNotifications() {
+    try {
+      // Get all delivered notifications
+      const deliveredNotifications = await Notifications.getPresentedNotificationsAsync();
+      
+      // Filter for RenoTimeline notifications and dismiss them
+      const renoTimelineNotifications = deliveredNotifications.filter(
+        notification => notification.request.content.data?.type === 'renotimeline_notification'
+      );
+      
+      // Dismiss each RenoTimeline notification
+      for (const notification of renoTimelineNotifications) {
+        await Notifications.dismissNotificationAsync(notification.request.identifier);
+      }
+      
+      console.log(`Cleared ${renoTimelineNotifications.length} RenoTimeline notifications`);
+    } catch (error) {
+      console.error('Error clearing RenoTimeline notifications:', error);
+    }
   }
 
   // Get current badge count
@@ -185,5 +207,36 @@ export class PushNotificationService {
   // Update badge count
   static async updateBadgeCount(count: number) {
     await Notifications.setBadgeCountAsync(count);
+  }
+
+  // Send local notification when new notification arrives
+  static async sendLocalNotification(notification: any) {
+    try {
+      const isHighPriority = notification.priority === 'high';
+      
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: notification.title,
+          body: notification.message,
+          data: {
+            type: 'renotimeline_notification',
+            notification_type: notification.notification_type,
+            project_id: notification.project_id,
+            calcreno_project_id: notification.calcreno_project_id,
+            notification_id: notification.id,
+            action_url: notification.data?.renotimeline_url,
+          },
+          sound: true,
+          ...(Platform.OS === 'android' && {
+            channelId: isHighPriority ? 'high-priority' : 'default'
+          })
+        },
+        trigger: null, // Show immediately
+      });
+      
+      console.log('Local notification sent:', notification.title);
+    } catch (error) {
+      console.error('Error sending local notification:', error);
+    }
   }
 } 

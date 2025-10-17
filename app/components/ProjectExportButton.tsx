@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, ActivityIndicator, Linking, Modal } from 'react-native';
 import { Calendar, ExternalLink, Clock, CheckCircle, X } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../utils/supabase';
-import { EventDetectionService } from '../utils/eventDetection';
+import { supabase, functionsSupabase } from '../utils/supabase';
+import { createClient } from '@supabase/supabase-js';
+import { GlassmorphicView } from './ui';
+import { colors, gradients, typography, spacing, borderRadius, shadows } from '../utils/theme';
 import type { Project } from '../utils/storage';
 import { generateUUID, isValidUUID } from '../utils/storage';
 
@@ -33,15 +36,14 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
 
     try {
       const { data, error } = await supabase
-        .from('project_links')
-        .select('renotimeline_project_id')
-        .eq('calcreno_project_id', project.id)
-        .eq('user_id', user.id)
+        .from('project_exports')
+        .select('timeline_project_id')
+        .eq('project_id', project.id)
         .single();
 
       if (!error && data) {
         setIsLinked(true);
-        setRenoTimelineProjectId(data.renotimeline_project_id);
+        setRenoTimelineProjectId(data.timeline_project_id);
       } else {
         setIsLinked(false);
         setRenoTimelineProjectId(null);
@@ -82,11 +84,9 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
             id: project.id,
             name: project.name,
             description: project.description,
-            start_date: project.startDate,
-            end_date: project.endDate,
-            total_cost: project.totalCost,
             status: project.status,
             user_id: user.id,
+            project_type: 'renovation',
           });
 
         if (projectError) {
@@ -110,23 +110,46 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
         created_at: new Date().toISOString(),
       };
 
-      // For now, simulate the API call and create local project link
-      console.log('Exporting project to RenoTimeline:', exportData);
+      // Get user session for proper JWT authentication
+      console.log('Getting user session for JWT...');
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      // Call the real RenoTimeline import API
-      const response = await fetch(`https://qxyuayjpllrndylxhgoq.supabase.co/functions/v1/import-from-calcreno`, {
+      if (sessionError || !session?.access_token) {
+        console.error('Authentication error:', sessionError);
+        throw new Error('User not authenticated');
+      }
+
+      console.log('✅ Got valid session, calling Edge Function via manual fetch...');
+      console.log('Export data being sent:', exportData);
+
+      const projectRef = 'kralcmyhjvoiywcpntkg';
+      const functionUrl = `https://${projectRef}.supabase.co/functions/v1/import-calcreno-project`;
+      const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyYWxjbXloanZvaXl3Y3BudGtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4NzM3OTAsImV4cCI6MjA3MTQ0OTc5MH0.10JbU5SR2bwJyGorKifCVqCqQcnbBR4xup7NnYxz3AE';
+
+      const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4eXVheWpwbGxybmR5bHhoZ29xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkxMzQ3MjgsImV4cCI6MjA2NDcxMDcyOH0.mJRzBqsdibq2szXkkbCRgAgQ5xUvbP9SieJx__cab_k`,
+          'apikey': anonKey,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify(exportData),
       });
 
-      const result = await response.json();
+      console.log('Manual fetch response status:', response.status);
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Failed to import project to RenoTimeline');
+      if (!response.ok) {
+        const errorBody = await response.text();
+        console.error('Edge Function failed (manual fetch):', errorBody);
+        throw new Error(`Import failed: Edge function returned status ${response.status}. Body: ${errorBody}`);
+      }
+
+      const result = await response.json();
+      
+      console.log('🎯 Edge Function result:', result);
+
+      if (!result || !result.success) {
+        throw new Error(result?.error || 'Failed to import project to RenoTimeline');
       }
 
       const renoTimelineProjectId = result.renotimeline_project_id;
@@ -135,20 +158,8 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
       setIsLinked(true);
       setRenoTimelineProjectId(renoTimelineProjectId);
 
-      // Send success notification
-      await EventDetectionService.sendCrossAppNotification({
-        project_id: project.id,
-        source_app: 'calcreno',
-        target_app: 'renotimeline',
-        notification_type: 'project_milestone',
-        title: 'Nowy projekt z CalcReno',
-        message: `Projekt "${project.name}" został pomyślnie zaimportowany z CalcReno`,
-        data: {
-          export_data: exportData,
-          link_created: true,
-        },
-        user_id: user.id,
-      } as any);
+      // Cross-app notification removed - only RenoTimeline→CalcReno flow is kept
+      // CalcReno→RenoTimeline notifications disabled per user request
 
       // Show success modal
       setShowSuccessModal(true);
@@ -175,10 +186,24 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
 
   if (checking) {
     return (
-      <View className="bg-gray-100 rounded-lg p-3 mt-2">
-        <View className="flex-row items-center justify-center">
-          <ActivityIndicator size="small" color="#6B7280" />
-          <Text className="text-gray-600 ml-2">Sprawdzanie połączenia...</Text>
+      <View style={{
+        backgroundColor: colors.glass.background,
+        borderRadius: borderRadius.md,
+        padding: spacing.sm,
+        marginTop: spacing.sm,
+        borderWidth: 1,
+        borderColor: colors.glass.border,
+      }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="small" color={colors.text.muted} />
+          <Text style={{
+            color: colors.text.muted,
+            marginLeft: spacing.sm,
+            fontSize: typography.sizes.sm,
+            fontFamily: typography.fonts.primary,
+          }}>
+            Sprawdzanie połączenia...
+          </Text>
         </View>
       </View>
     );
@@ -188,35 +213,101 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
     <>
       {isLinked ? (
         <TouchableOpacity
-          className="bg-green-500 rounded-lg p-3 mt-2 flex-row items-center justify-center"
+          style={{
+            borderRadius: borderRadius.md,
+            padding: spacing.sm,
+            marginTop: spacing.sm,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 44,
+            ...shadows.sm,
+          }}
           onPress={handleLinkedProjectPress}
           activeOpacity={0.8}
         >
-          <CheckCircle size={18} color="#FFFFFF" />
-          <Text className="text-white font-semibold ml-2">
-             Połączono z RenoTimeline
-          </Text>
+          <LinearGradient
+            colors={gradients.success.colors}
+            start={gradients.success.start}
+            end={gradients.success.end}
+            style={{
+              borderRadius: borderRadius.md,
+              padding: spacing.sm,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              flex: 1,
+            }}
+          >
+            <CheckCircle size={18} color={colors.text.primary} />
+            <Text style={{
+              color: colors.text.primary,
+              fontWeight: typography.weights.semibold,
+              marginLeft: spacing.sm,
+              fontSize: typography.sizes.sm,
+              fontFamily: typography.fonts.primary,
+            }}>
+              Połączono z RenoTimeline
+            </Text>
+          </LinearGradient>
         </TouchableOpacity>
       ) : (
         <TouchableOpacity
-          className="bg-purple-500 rounded-lg p-3 mt-2 flex-row items-center justify-center"
+          style={{
+            borderRadius: borderRadius.md,
+            padding: spacing.sm,
+            marginTop: spacing.sm,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 44,
+            ...shadows.sm,
+          }}
           onPress={exportToRenoTimeline}
           disabled={exporting}
           activeOpacity={0.8}
         >
-          {exporting ? (
-            <>
-              <ActivityIndicator size="small" color="#FFFFFF" />
-              <Text className="text-white font-semibold ml-2">Eksportowanie...</Text>
-            </>
-          ) : (
-            <>
-              <Calendar size={18} color="#FFFFFF" />
-              <Text className="text-white font-semibold ml-2">
-                📅 Utwórz harmonogram w RenoTimeline
-              </Text>
-            </>
-          )}
+          <LinearGradient
+            colors={[colors.accent.purple, colors.primary.start]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{
+              borderRadius: borderRadius.md,
+              padding: spacing.sm,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              flex: 1,
+            }}
+          >
+            {exporting ? (
+              <>
+                <ActivityIndicator size="small" color={colors.text.primary} />
+                <Text style={{
+                  color: colors.text.primary,
+                  fontWeight: typography.weights.semibold,
+                  marginLeft: spacing.sm,
+                  fontSize: typography.sizes.sm,
+                  fontFamily: typography.fonts.primary,
+                }}>
+                  Eksportowanie...
+                </Text>
+              </>
+            ) : (
+              <>
+                <ExternalLink size={18} color={colors.text.primary} />
+                <Text style={{
+                  color: colors.text.primary,
+                  fontWeight: typography.weights.semibold,
+                  marginLeft: spacing.sm,
+                  fontSize: typography.sizes.sm,
+                  fontFamily: typography.fonts.primary,
+                }}>
+                  Wyślij do RenoTimeline
+                </Text>
+              </>
+            )}
+          </LinearGradient>
         </TouchableOpacity>
       )}
 
@@ -227,41 +318,86 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
         animationType="fade"
         onRequestClose={() => setShowSuccessModal(false)}
       >
-        <View className="flex-1 justify-center items-center bg-black/70">
-          <View className="bg-gray-800 rounded-xl mx-6 p-6 max-w-sm w-full border border-gray-700">
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.glass.overlay }}>
+          <GlassmorphicView
+            intensity="heavy"
+            style={{
+              borderRadius: borderRadius.xl,
+              marginHorizontal: spacing.lg,
+              padding: spacing.lg,
+              maxWidth: 400,
+              width: '100%',
+              borderWidth: 1,
+              borderColor: colors.glass.border,
+            }}
+          >
             {/* Close button */}
             <TouchableOpacity
-              className="absolute top-4 right-4 p-1"
+              style={{
+                position: "absolute",
+                top: spacing.md,
+                right: spacing.md,
+                padding: spacing.xs,
+              }}
               onPress={() => setShowSuccessModal(false)}
             >
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={colors.text.muted} />
             </TouchableOpacity>
 
             {/* Success icon */}
-            <View className="items-center mb-4">
-              <View className="bg-green-900/30 rounded-full p-3 mb-3">
-                <CheckCircle size={32} color="#10B981" />
+            <View style={{ alignItems: "center", marginBottom: spacing.md }}>
+              <View style={{
+                backgroundColor: colors.status.success.start + '30',
+                borderRadius: borderRadius.full,
+                padding: spacing.md,
+                marginBottom: spacing.sm,
+              }}>
+                <CheckCircle size={32} color={colors.status.success.start} />
               </View>
-              <Text className="text-xl font-bold text-white text-center">
+              <Text style={{
+                fontSize: typography.sizes.xl,
+                fontWeight: typography.weights.bold,
+                color: colors.text.primary,
+                textAlign: "center",
+                fontFamily: typography.fonts.primary,
+              }}>
                 Sukces!
               </Text>
             </View>
 
             {/* Message */}
-            <Text className="text-gray-300 text-center mb-6 leading-6">
+            <Text style={{
+              color: colors.text.secondary,
+              textAlign: "center",
+              marginBottom: spacing.lg,
+              lineHeight: 24,
+              fontSize: typography.sizes.base,
+              fontFamily: typography.fonts.primary,
+            }}>
               Projekt "{project.name}" został pomyślnie eksportowany do RenoTimeline.
             </Text>
 
             {/* Action button */}
             <TouchableOpacity
-              className="bg-blue-600 rounded-lg py-3 px-6"
+              style={{
+                borderRadius: borderRadius.md,
+                paddingVertical: spacing.sm,
+                paddingHorizontal: spacing.lg,
+                backgroundColor: colors.primary.start,
+                alignItems: "center",
+              }}
               onPress={() => setShowSuccessModal(false)}
             >
-              <Text className="text-white font-semibold text-center">
+              <Text style={{
+                color: colors.text.primary,
+                fontWeight: typography.weights.semibold,
+                fontSize: typography.sizes.base,
+                fontFamily: typography.fonts.primary,
+              }}>
                 OK
               </Text>
             </TouchableOpacity>
-          </View>
+          </GlassmorphicView>
         </View>
       </Modal>
 
@@ -272,33 +408,79 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
         animationType="fade"
         onRequestClose={() => setShowInfoModal(false)}
       >
-        <View className="flex-1 justify-center items-center bg-black/70">
-          <View className="bg-gray-800 rounded-xl mx-6 p-6 max-w-sm w-full border border-gray-700">
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.glass.overlay }}>
+          <GlassmorphicView
+            intensity="heavy"
+            style={{
+              borderRadius: borderRadius.xl,
+              marginHorizontal: spacing.lg,
+              padding: spacing.lg,
+              maxWidth: 400,
+              width: '100%',
+              borderWidth: 1,
+              borderColor: colors.glass.border,
+            }}
+          >
             {/* Close button */}
             <TouchableOpacity
-              className="absolute top-4 right-4 p-1"
+              style={{
+                position: "absolute",
+                top: spacing.md,
+                right: spacing.md,
+                padding: spacing.xs,
+              }}
               onPress={() => setShowInfoModal(false)}
             >
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={colors.text.muted} />
             </TouchableOpacity>
 
             {/* Info icon */}
-            <View className="items-center mb-4">
-              <View className="bg-green-900/30 rounded-full p-3 mb-3">
-                <CheckCircle size={32} color="#10B981" />
+            <View style={{ alignItems: "center", marginBottom: spacing.md }}>
+              <View style={{
+                backgroundColor: colors.status.success.start + '30',
+                borderRadius: borderRadius.full,
+                padding: spacing.md,
+                marginBottom: spacing.sm,
+              }}>
+                <CheckCircle size={32} color={colors.status.success.start} />
               </View>
-              <Text className="text-xl font-bold text-white text-center">
+              <Text style={{
+                fontSize: typography.sizes.xl,
+                fontWeight: typography.weights.bold,
+                color: colors.text.primary,
+                textAlign: "center",
+                fontFamily: typography.fonts.primary,
+              }}>
                 Projekt Połączony
               </Text>
             </View>
 
             {/* Message */}
-            <View className="mb-6">
-              <Text className="text-gray-300 text-center leading-6 mb-4">
+            <View style={{ marginBottom: spacing.lg }}>
+              <Text style={{
+                color: colors.text.secondary,
+                textAlign: "center",
+                lineHeight: 24,
+                marginBottom: spacing.md,
+                fontSize: typography.sizes.base,
+                fontFamily: typography.fonts.primary,
+              }}>
                 Projekt "{project.name}" jest już dostępny w RenoTimeline.
               </Text>
-              <View className="bg-blue-900/30 rounded-lg p-4 border border-blue-800/50">
-                <Text className="text-blue-300 text-sm text-center font-medium">
+              <View style={{
+                backgroundColor: colors.primary.start + '20',
+                borderRadius: borderRadius.md,
+                padding: spacing.md,
+                borderWidth: 1,
+                borderColor: colors.primary.start + '40',
+              }}>
+                <Text style={{
+                  color: colors.primary.start,
+                  fontSize: typography.sizes.sm,
+                  textAlign: "center",
+                  fontWeight: typography.weights.medium,
+                  fontFamily: typography.fonts.primary,
+                }}>
                   💡 Aby zobaczyć harmonogram i zadania, otwórz aplikację RenoTimeline w przeglądarce internetowej.
                 </Text>
               </View>
@@ -306,14 +488,25 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
 
             {/* Action button */}
             <TouchableOpacity
-              className="bg-blue-600 rounded-lg py-3 px-6"
+              style={{
+                borderRadius: borderRadius.md,
+                paddingVertical: spacing.sm,
+                paddingHorizontal: spacing.lg,
+                backgroundColor: colors.primary.start,
+                alignItems: "center",
+              }}
               onPress={() => setShowInfoModal(false)}
             >
-              <Text className="text-white font-semibold text-center">
+              <Text style={{
+                color: colors.text.primary,
+                fontWeight: typography.weights.semibold,
+                fontSize: typography.sizes.base,
+                fontFamily: typography.fonts.primary,
+              }}>
                 Rozumiem
               </Text>
             </TouchableOpacity>
-          </View>
+          </GlassmorphicView>
         </View>
       </Modal>
     </>

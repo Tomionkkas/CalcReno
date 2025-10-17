@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, sharedSupabase } from './supabase';
 import type { Project } from './storage';
 import { generateUUID, isValidUUID } from './storage';
 
@@ -105,13 +105,23 @@ export class EventDetectionService {
 
   static async sendCrossAppNotification(notification: CrossAppNotification) {
     try {
+      // Validate user ID format (should be UUID)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(notification.user_id)) {
+        console.error('Invalid user ID format:', notification.user_id);
+        console.error('Expected UUID format, got:', typeof notification.user_id, notification.user_id);
+        return;
+      }
+
+      console.log('Sending notification with user ID:', notification.user_id);
+
       // 1. Zapisz powiadomienie w Supabase
-      const { error } = await supabase
+      const { error } = await sharedSupabase
         .from('cross_app_notifications')
         .insert({
           user_id: notification.user_id,
-          source_app: notification.source_app,
-          target_app: notification.target_app,
+          from_app: notification.source_app,
+          to_app: notification.target_app,
           notification_type: notification.notification_type,
           title: notification.title,
           message: notification.message,
@@ -121,6 +131,11 @@ export class EventDetectionService {
 
       if (error) {
         console.error('Failed to save notification to database:', error);
+        console.error('Notification data:', {
+          user_id: notification.user_id,
+          notification_type: notification.notification_type,
+          title: notification.title
+        });
         return;
       }
 

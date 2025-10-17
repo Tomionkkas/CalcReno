@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Modal, Linking, Pressable, ScrollView, RefreshControl, Alert, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Modal, Linking, Pressable, ScrollView, RefreshControl, Alert, Dimensions, Platform } from 'react-native';
 import { Bell, X, ExternalLink, Calendar, AlertTriangle, CheckCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../hooks/useAuth';
 import { EventDetectionService } from '../utils/eventDetection';
-import { supabase } from '../utils/supabase';
+import { supabase, sharedSupabase } from '../utils/supabase';
 import { PushNotificationService } from '../utils/pushNotifications';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors, gradients, typography, spacing, borderRadius, shadows, animations } from '../utils/theme';
+import { useAccessibility } from '../hooks/useAccessibility';
 
 // Get screen dimensions for responsive design
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isSmallScreen = screenWidth < 380;
 const isShortScreen = screenHeight < 700;
+const isLargeScreen = screenWidth > 500;
 
 interface Notification {
   id: string;
@@ -28,12 +31,15 @@ interface Notification {
 interface RenoTimelineNotification {
   id: string;
   user_id: string | null;
+  project_id: string;
+  calcreno_project_id: string | null;
   source_app: string;
   target_app: string;
   notification_type: string;
   title: string;
   message: string;
-  data: any; // JSON data containing project_id, project_name, action_url, priority, etc.
+  priority: string;
+  data: any; // JSON data containing project_name, action_url, etc.
   is_read: boolean | null;
   expires_at: string | null;
   created_at: string | null;
@@ -50,35 +56,45 @@ export function NotificationCenter() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const { getAccessibilityProps } = useAccessibility();
 
   useEffect(() => {
     fetchNotifications();
 
     if (user) {
       // Create a unique channel name for this user session
-      const channelName = `user_notifications_${user.id}_${Date.now()}`;
+      const channelName = `user_notifications_${user.id}`;
       
-      // Real-time subscription dla nowych powiadomień
-      const subscription = supabase
+      // Real-time subscription for new notifications
+      const subscription = sharedSupabase
         .channel(channelName)
         .on(
           'postgres_changes',
           {
             event: 'INSERT',
-            schema: 'public',
+            schema: 'shared_schema',
             table: 'cross_app_notifications',
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
+            console.log('Real-time notification received:', payload);
             const newNotification = payload.new as RenoTimelineNotification;
             
-            // Only add if it's from renotimeline
-            if (newNotification.source_app === 'renotimeline') {
-              setNotifications(prev => [newNotification, ...prev]);
+            // Only add if it's from renotimeline to calcreno and unread
+            if (newNotification.from_app === 'renotimeline' && newNotification.to_app === 'calcreno' && !newNotification.is_read) {
+              console.log('Adding new notification to state');
+              setNotifications(prev => {
+                // Avoid duplicates
+                const exists = prev.some(n => n.id === newNotification.id);
+                if (exists) return prev;
+                return [newNotification, ...prev];
+              });
               setUnreadCount(prev => {
                 const newCount = prev + 1;
                 // Update badge count with new count
                 PushNotificationService.updateBadgeCount(newCount);
+                // Send local push notification
+                PushNotificationService.sendLocalNotification(newNotification);
                 return newCount;
               });
             }
@@ -88,22 +104,31 @@ export function NotificationCenter() {
           'postgres_changes',
           {
             event: 'UPDATE',
-            schema: 'public',
+            schema: 'shared_schema',
             table: 'cross_app_notifications',
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
+            console.log('Real-time notification updated:', payload);
             const updatedNotification = payload.new as RenoTimelineNotification;
             
-            // Update existing notification if it's already in the list
-            setNotifications(prev => 
-              prev.map(n => n.id === updatedNotification.id ? updatedNotification : n)
-            );
+            // If notification was marked as read, remove it from display
+            if (updatedNotification.is_read) {
+              setNotifications(prev => prev.filter(n => n.id !== updatedNotification.id));
+              setUnreadCount(prev => Math.max(0, prev - 1));
+            } else {
+              // Update existing notification if it's still unread
+              setNotifications(prev => 
+                prev.map(n => n.id === updatedNotification.id ? updatedNotification : n)
+              );
+            }
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Subscription status:', status);
+        });
 
-      // Fallback: Polling every 3 seconds as backup
+      // Fallback: Polling every 30 seconds as backup (reduced frequency)
       const pollingInterval = setInterval(async () => {
         try {
           const { data, error } = await supabase
@@ -111,42 +136,57 @@ export function NotificationCenter() {
             .select('*')
             .eq('user_id', user.id)
             .eq('source_app', 'renotimeline')
+            .eq('is_read', false)
             .order('created_at', { ascending: false })
             .limit(50);
 
           if (!error && data) {
-            const currentCount = notifications.length;
-            const newCount = data.length;
-            
-            if (newCount > currentCount) {
-              setNotifications(data);
-              const unread = data.filter(n => !n.is_read).length;
-              setUnreadCount(unread);
-              await PushNotificationService.updateBadgeCount(unread);
-            }
+            setNotifications(prev => {
+              // Only update if there's actually new data
+              const prevIds = new Set(prev.map(n => n.id));
+              const newNotifications = data.filter(n => !prevIds.has(n.id));
+              
+              if (newNotifications.length > 0) {
+                const combined = [...newNotifications, ...prev];
+                const unread = combined.filter(n => !n.is_read).length;
+                setUnreadCount(unread);
+                PushNotificationService.updateBadgeCount(unread);
+                return combined;
+              }
+              return prev;
+            });
           }
         } catch (error) {
           console.error('Error polling notifications:', error);
         }
-      }, 3000);
+      }, 30000);
 
       return () => {
         subscription.unsubscribe();
         clearInterval(pollingInterval);
       };
     }
-  }, [user, notifications.length]);
+  }, [user]);
+
+  // Clear system notifications when modal is opened
+  useEffect(() => {
+    if (visible && user) {
+      PushNotificationService.clearRenoTimelineNotifications();
+    }
+  }, [visible, user]);
 
   const fetchNotifications = async () => {
     if (!user) return;
     
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await sharedSupabase
         .from('cross_app_notifications')
         .select('*')
         .eq('user_id', user.id)
-        .eq('source_app', 'renotimeline')
+        .eq('from_app', 'renotimeline')
+        .eq('to_app', 'calcreno')
+        .eq('is_read', false)  // Only fetch unread notifications
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -156,7 +196,7 @@ export function NotificationCenter() {
       }
 
       setNotifications(data || []);
-      const unread = data?.filter(n => !n.is_read).length || 0;
+      const unread = data?.length || 0;  // All fetched notifications are unread
       setUnreadCount(unread);
       
       // Update badge count
@@ -171,13 +211,14 @@ export function NotificationCenter() {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      await supabase
+      await sharedSupabase
         .from('cross_app_notifications')
         .update({ is_read: true })
         .eq('id', notificationId);
 
+      // Remove the notification from display since we only show unread ones
       setNotifications(prev =>
-        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+        prev.filter(n => n.id !== notificationId)
       );
       
       const newUnreadCount = Math.max(0, unreadCount - 1);
@@ -192,24 +233,21 @@ export function NotificationCenter() {
 
   const markAllAsRead = async () => {
     try {
-      const unreadNotifications = notifications.filter(n => !n.is_read);
-      const ids = unreadNotifications.map(n => n.id);
-      
-      if (ids.length === 0) return;
-
-      await supabase
+      await sharedSupabase
         .from('cross_app_notifications')
         .update({ is_read: true })
-        .in('id', ids);
+        .eq('user_id', user?.id)
+        .eq('from_app', 'renotimeline')
+        .eq('to_app', 'calcreno')
+        .eq('is_read', false);
 
-      setNotifications(prev =>
-        prev.map(n => ({ ...n, is_read: true }))
-      );
-      
+      setNotifications([]);
       setUnreadCount(0);
+      
+      // Update badge count
       await PushNotificationService.updateBadgeCount(0);
     } catch (error) {
-      console.error('Error marking all as read:', error);
+      console.error('Error marking all notifications as read:', error);
     }
   };
 
@@ -250,22 +288,22 @@ export function NotificationCenter() {
 
   const getNotificationIconColor = (type: string) => {
     switch (type) {
-      case 'progress_update': return '#10B981';
-      case 'budget_alert': return '#F59E0B';
-      case 'milestone': return '#6366F1';
-      case 'delay_warning': return '#EF4444';
-      case 'material_ready': return '#3B82F6';
-      case 'cost_savings_opportunity': return '#8B5CF6';
-      default: return '#6B7280';
+      case 'progress_update': return colors.status.success.start;
+      case 'budget_alert': return colors.status.warning.start;
+      case 'milestone': return colors.accent.purple;
+      case 'delay_warning': return colors.status.error.start;
+      case 'material_ready': return colors.primary.start;
+      case 'cost_savings_opportunity': return colors.accent.pink;
+      default: return colors.text.muted;
     }
   };
 
   const getPriorityIndicator = (priority?: string) => {
     switch (priority) {
-      case 'high': return { color: '#EF4444', label: 'Wysoki' };
-      case 'medium': return { color: '#F59E0B', label: 'Średni' };
-      case 'low': return { color: '#10B981', label: 'Niski' };
-      default: return { color: '#6B7280', label: 'Normalny' };
+      case 'high': return { color: colors.status.error.start, label: 'Wysoki' };
+      case 'medium': return { color: colors.status.warning.start, label: 'Średni' };
+      case 'low': return { color: colors.status.success.start, label: 'Niski' };
+      default: return { color: colors.text.muted, label: 'Normalny' };
     }
   };
 
@@ -289,184 +327,242 @@ export function NotificationCenter() {
     }
   };
 
-  // Responsive styling values
+  // Responsive styling values using theme constants
   const responsiveStyles = {
-    headerPadding: isSmallScreen ? 12 : 16,
-    notificationMargin: isSmallScreen ? 8 : 12,
-    notificationPadding: isSmallScreen ? 12 : 16,
-    iconSize: isSmallScreen ? 16 : 20,
-    headerIconSize: isSmallScreen ? 20 : 24,
-    titleFontSize: isSmallScreen ? 18 : 20,
-    bodyFontSize: isSmallScreen ? 13 : 14,
-    smallFontSize: isSmallScreen ? 11 : 12,
-    buttonPadding: isSmallScreen ? 6 : 8,
-    emptyStatePadding: isSmallScreen ? 24 : 32,
-    emptyStateIconSize: isSmallScreen ? 40 : 48,
+    headerPadding: isSmallScreen ? spacing.sm : isLargeScreen ? spacing.lg : spacing.md,
+    notificationMargin: isSmallScreen ? spacing.xs : isLargeScreen ? spacing.md : spacing.sm,
+    notificationPadding: isSmallScreen ? spacing.sm : isLargeScreen ? spacing.lg : spacing.md,
+    iconSize: isSmallScreen ? 16 : isLargeScreen ? 24 : 20,
+    headerIconSize: isSmallScreen ? 20 : isLargeScreen ? 28 : 24,
+    titleFontSize: isSmallScreen ? typography.sizes.lg : isLargeScreen ? typography.sizes.xl + 2 : typography.sizes.xl,
+    bodyFontSize: isSmallScreen ? typography.sizes.sm : isLargeScreen ? typography.sizes.lg : typography.sizes.base,
+    smallFontSize: isSmallScreen ? typography.sizes.xs : isLargeScreen ? typography.sizes.base : typography.sizes.sm,
+    buttonPadding: isSmallScreen ? spacing.xs : isLargeScreen ? spacing.md : spacing.sm,
+    emptyStatePadding: isSmallScreen ? spacing.lg : isLargeScreen ? spacing.xl + 8 : spacing.xl,
+    emptyStateIconSize: isSmallScreen ? 40 : isLargeScreen ? 56 : 48,
+    maxCardWidth: isLargeScreen ? 600 : screenWidth - (spacing.md * 2),
   };
 
   if (!user) return null;
 
   return (
     <>
-      {/* Notification Bell - responsive sizing */}
-      <Pressable
+      {/* Notification Bell - Premium Glassmorphic Design */}
+      <TouchableOpacity
         onPress={() => setVisible(true)}
         style={{
-          backgroundColor: '#1E2139',
+          backgroundColor: colors.glass.background,
           borderWidth: 1,
-          borderColor: '#2A2D4A',
-          borderRadius: 8,
-          padding: responsiveStyles.buttonPadding,
+          borderColor: colors.glass.border,
+          borderRadius: borderRadius.md,
+          padding: spacing.xs,
           position: 'relative',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 2,
+          minHeight: 44,
+          minWidth: 44,
+          justifyContent: 'center',
+          alignItems: 'center',
+          ...shadows.md,
         }}
+        activeOpacity={0.7}
+        {...getAccessibilityProps(
+          `Powiadomienia${unreadCount > 0 ? ` (${unreadCount} nieprzeczytane)` : ''}`,
+          'Otwórz centrum powiadomień'
+        )}
       >
-        <Ionicons name="notifications" size={responsiveStyles.iconSize} color="#B8BCC8" />
+        <Bell size={16} color={colors.text.secondary} />
         {unreadCount > 0 && (
           <View style={{
             position: 'absolute',
-            top: -2,
-            right: -2,
-            backgroundColor: '#EF4444',
-            borderRadius: 10,
+            top: -4,
+            right: -4,
+            backgroundColor: colors.status.error.start,
+            borderRadius: borderRadius.sm,
             minWidth: 20,
             height: 20,
             justifyContent: 'center',
             alignItems: 'center',
             borderWidth: 2,
-            borderColor: '#1E2139',
+            borderColor: colors.background.primary,
+            shadowColor: colors.status.error.glow,
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.6,
+            shadowRadius: 4,
+            elevation: 4,
           }}>
             <Text style={{
-              color: 'white',
-              fontSize: 10,
-              fontWeight: 'bold',
+              color: colors.text.inverse,
+              fontSize: typography.sizes.xs,
+              fontWeight: typography.weights.bold,
+              fontFamily: typography.fonts.primary,
             }}>
               {unreadCount > 99 ? '99+' : unreadCount}
             </Text>
           </View>
         )}
-      </Pressable>
+      </TouchableOpacity>
 
       {/* Notification Modal - full responsive design */}
-      <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0B1E' }} edges={['top', 'left', 'right', 'bottom']}>
+      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }} edges={['top', 'left', 'right', 'bottom']}>
           <LinearGradient
-            colors={["#0A0B1E", "#151829"]}
+            colors={gradients.background.colors}
+            start={gradients.background.start}
+            end={gradients.background.end}
             style={{ flex: 1 }}
           >
-            {/* Header with responsive padding and sizing */}
-            <View style={{
-              paddingHorizontal: responsiveStyles.headerPadding,
-              paddingVertical: isShortScreen ? 16 : 20,
-              paddingTop: 20,
-              borderBottomWidth: 1,
-              borderBottomColor: '#2A2D4A',
-            }}>
+            {/* Header with Glassmorphic Design */}
+            <LinearGradient
+              colors={gradients.background.colors}
+              start={gradients.background.start}
+              end={gradients.background.end}
+              style={{
+                paddingHorizontal: responsiveStyles.headerPadding,
+                paddingVertical: isShortScreen ? spacing.md : spacing.lg,
+                paddingTop: Platform.OS === 'ios' ? spacing.sm : spacing.lg,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.background.card,
+                minHeight: 110,
+                justifyContent: 'center',
+              }}
+            >
+              {/* Main Header Content */}
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}>
+                {/* Left Section - Title with Icon */}
                 <View style={{ 
                   flexDirection: 'row', 
                   alignItems: 'center',
                   flex: 1,
-                  marginRight: 8,
+                  marginRight: spacing.sm,
                 }}>
-                  <Ionicons name="notifications" size={responsiveStyles.headerIconSize} color="#6C63FF" />
-                  <Text style={{
-                    color: 'white',
-                    fontSize: responsiveStyles.titleFontSize,
-                    fontWeight: 'bold',
-                    marginLeft: 8,
-                  }} numberOfLines={1}>
-                    Powiadomienia
-                  </Text>
+                  <View style={{
+                    backgroundColor: colors.primary.start + '20',
+                    borderRadius: borderRadius.md,
+                    padding: spacing.xs,
+                    marginRight: spacing.sm,
+                    borderWidth: 1,
+                    borderColor: colors.primary.start + '30',
+                  }}>
+                    <Ionicons 
+                      name="notifications" 
+                      size={responsiveStyles.headerIconSize} 
+                      color={colors.primary.start} 
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{
+                      color: colors.text.primary,
+                      fontSize: responsiveStyles.titleFontSize,
+                      fontWeight: typography.weights.bold,
+                      fontFamily: typography.fonts.primary,
+                    }} numberOfLines={1}>
+                      Powiadomienia
+                    </Text>
+                    <Text style={{
+                      color: colors.text.tertiary,
+                      fontSize: responsiveStyles.smallFontSize,
+                      fontFamily: typography.fonts.primary,
+                      marginTop: spacing.xs / 2,
+                    }}>
+                      {unreadCount > 0 ? `${unreadCount} nieprzeczytane` : 'Wszystkie przeczytane'}
+                    </Text>
+                  </View>
                 </View>
+
+                {/* Right Section - Action Buttons */}
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   {unreadCount > 0 && (
                     <Pressable 
                       onPress={markAllAsRead}
                       style={{
-                        backgroundColor: '#1E2139',
+                        backgroundColor: colors.glass.background,
                         borderWidth: 1,
-                        borderColor: '#2A2D4A',
-                        borderRadius: 8,
-                        paddingHorizontal: isSmallScreen ? 8 : 12,
-                        paddingVertical: 6,
-                        marginRight: 8,
+                        borderColor: colors.glass.border,
+                        borderRadius: borderRadius.md,
+                        paddingHorizontal: spacing.sm,
+                        paddingVertical: spacing.xs,
+                        marginRight: spacing.sm,
+                        ...shadows.md,
                       }}
                     >
                       <Text style={{
-                        color: '#B8BCC8',
+                        color: colors.text.secondary,
                         fontSize: responsiveStyles.smallFontSize,
-                        fontWeight: '500',
+                        fontWeight: typography.weights.medium,
+                        fontFamily: typography.fonts.primary,
                       }}>
                         {isSmallScreen ? 'Oznacz' : 'Oznacz wszystkie'}
                       </Text>
                     </Pressable>
                   )}
+                  
                   <Pressable 
                     onPress={fetchNotifications}
                     style={{
-                      backgroundColor: '#6C63FF',
+                      backgroundColor: colors.glass.background,
                       borderWidth: 1,
-                      borderColor: '#8B7FF7',
-                      borderRadius: 8,
+                      borderColor: colors.glass.border,
+                      borderRadius: borderRadius.md,
                       padding: responsiveStyles.buttonPadding,
-                      marginRight: 8,
+                      marginRight: spacing.sm,
+                      ...shadows.md,
                     }}
                   >
-                    <Ionicons name="refresh" size={responsiveStyles.iconSize} color="white" />
+                    <Ionicons name="refresh" size={responsiveStyles.iconSize} color={colors.text.secondary} />
                   </Pressable>
+                  
                   <Pressable
                     onPress={() => setVisible(false)}
                     style={{
-                      backgroundColor: '#1E2139',
+                      backgroundColor: colors.glass.background,
                       borderWidth: 1,
-                      borderColor: '#2A2D4A',
-                      borderRadius: 8,
+                      borderColor: colors.glass.border,
+                      borderRadius: borderRadius.md,
                       padding: responsiveStyles.buttonPadding,
+                      ...shadows.md,
                     }}
                   >
-                    <Ionicons name="close" size={responsiveStyles.iconSize} color="#B8BCC8" />
+                    <Ionicons name="close" size={responsiveStyles.iconSize} color={colors.text.secondary} />
                   </Pressable>
                 </View>
               </View>
               
-              {/* Source indicator */}
+              {/* Source indicator with enhanced styling */}
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                marginTop: 8,
+                marginTop: spacing.sm,
+                paddingHorizontal: spacing.xs,
               }}>
                 <View style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: '#4DABF7',
-                  marginRight: 6,
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: colors.status.info.start,
+                  marginRight: spacing.xs,
                 }} />
                 <Text style={{
-                  color: '#B8BCC8',
+                  color: colors.text.tertiary,
                   fontSize: responsiveStyles.smallFontSize,
+                  fontFamily: typography.fonts.primary,
+                  opacity: 0.8,
                 }}>
                   Z aplikacji RenoTimeline
                 </Text>
               </View>
-            </View>
+            </LinearGradient>
 
             {/* Notifications List with responsive ScrollView */}
             <ScrollView
               style={{ flex: 1 }}
               contentContainerStyle={{ 
-                paddingBottom: isSmallScreen ? 40 : 50,
-                paddingTop: 8,
+                paddingBottom: isSmallScreen ? spacing.xl : isLargeScreen ? spacing.xl + 8 : spacing.xl + 2,
+                paddingTop: spacing.sm,
                 minHeight: isShortScreen ? '100%' : undefined,
+                alignItems: isLargeScreen ? 'center' : 'stretch',
               }}
               showsVerticalScrollIndicator={false}
               contentInsetAdjustmentBehavior="automatic"
@@ -474,8 +570,8 @@ export function NotificationCenter() {
                 <RefreshControl 
                   refreshing={refreshing} 
                   onRefresh={onRefresh}
-                  tintColor="#6C63FF"
-                  colors={["#6C63FF"]}
+                  tintColor={colors.primary.start}
+                  colors={[colors.primary.start]}
                 />
               }
             >
@@ -484,14 +580,15 @@ export function NotificationCenter() {
                   flex: 1,
                   justifyContent: 'center',
                   alignItems: 'center',
-                  paddingVertical: isShortScreen ? 40 : 60,
+                  paddingVertical: isShortScreen ? spacing.xl : spacing.xl + 4,
                   minHeight: screenHeight * 0.4,
                 }}>
-                  <Ionicons name="reload" size={responsiveStyles.emptyStateIconSize * 0.7} color="#6B7280" />
+                  <Ionicons name="reload" size={responsiveStyles.emptyStateIconSize * 0.7} color={colors.text.muted} />
                   <Text style={{
-                    color: '#6B7280',
-                    marginTop: 12,
+                    color: colors.text.muted,
+                    marginTop: spacing.sm,
                     fontSize: responsiveStyles.bodyFontSize,
+                    fontFamily: typography.fonts.primary,
                   }}>
                     Ładowanie powiadomień...
                   </Text>
@@ -501,34 +598,36 @@ export function NotificationCenter() {
                   flex: 1,
                   justifyContent: 'center',
                   alignItems: 'center',
-                  paddingVertical: isShortScreen ? 40 : 60,
-                  paddingHorizontal: responsiveStyles.headerPadding + 16,
+                  paddingVertical: isShortScreen ? spacing.xl : spacing.xl + 4,
+                  paddingHorizontal: responsiveStyles.headerPadding + spacing.md,
                   minHeight: screenHeight * 0.4,
                 }}>
                   <View style={{
-                    backgroundColor: '#1E2139',
-                    borderRadius: 16,
+                    backgroundColor: colors.background.tertiary,
+                    borderRadius: borderRadius.lg,
                     padding: responsiveStyles.emptyStatePadding,
                     alignItems: 'center',
                     borderWidth: 1,
-                    borderColor: '#2A2D4A',
-                    maxWidth: screenWidth - 32,
+                    borderColor: colors.background.card,
+                    maxWidth: responsiveStyles.maxCardWidth,
                   }}>
-                    <Ionicons name="notifications-off" size={responsiveStyles.emptyStateIconSize} color="#6B7280" />
+                    <Ionicons name="notifications-off" size={responsiveStyles.emptyStateIconSize} color={colors.text.muted} />
                     <Text style={{
-                      color: '#B8BCC8',
+                      color: colors.text.tertiary,
                       fontSize: responsiveStyles.titleFontSize - 2,
-                      fontWeight: '600',
+                      fontWeight: typography.weights.semibold,
+                      fontFamily: typography.fonts.primary,
                       textAlign: 'center',
-                      marginTop: 16,
+                      marginTop: spacing.md,
                     }}>
                       Brak powiadomień
                     </Text>
                     <Text style={{
-                      color: '#6B7280',
+                      color: colors.text.muted,
                       fontSize: responsiveStyles.bodyFontSize,
+                      fontFamily: typography.fonts.primary,
                       textAlign: 'center',
-                      marginTop: 8,
+                      marginTop: spacing.sm,
                       lineHeight: 20,
                     }}>
                       Gdy Twoje projekty będą realizowane w RenoTimeline, tutaj pojawią się aktualizacje postępów
@@ -537,7 +636,7 @@ export function NotificationCenter() {
                 </View>
               ) : (
                 notifications.map((notification) => {
-                  const priority = getPriorityIndicator(notification.data?.priority);
+                  const priority = getPriorityIndicator(notification.priority);
                   const iconName = getNotificationIcon(notification.notification_type);
                   const iconColor = getNotificationIconColor(notification.notification_type);
                   const projectName = notification.data?.project_name;
@@ -546,84 +645,119 @@ export function NotificationCenter() {
                   const actionUrl = notification.data?.action_url;
                   
                   return (
-                    <Pressable
+                    <View
                       key={notification.id}
-                      onPress={() => markAsRead(notification.id)}
                       style={{
-                        backgroundColor: '#1E2139',
-                        borderWidth: 1,
-                        borderColor: notification.is_read ? '#2A2D4A' : '#6C63FF',
-                        borderRadius: 12,
                         marginHorizontal: responsiveStyles.notificationMargin,
                         marginVertical: responsiveStyles.notificationMargin / 2,
-                        padding: responsiveStyles.notificationPadding,
-                        opacity: notification.is_read ? 0.7 : 1,
-                        maxWidth: screenWidth - (responsiveStyles.notificationMargin * 2),
+                        maxWidth: responsiveStyles.maxCardWidth,
+                        alignSelf: isLargeScreen ? 'center' : 'stretch',
                       }}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                        {/* Icon - responsive sizing */}
-                        <View style={{
-                          width: isSmallScreen ? 36 : 40,
-                          height: isSmallScreen ? 36 : 40,
-                          borderRadius: isSmallScreen ? 18 : 20,
-                          backgroundColor: `${iconColor}20`,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          marginRight: isSmallScreen ? 10 : 12,
-                        }}>
-                          <Ionicons name={iconName as any} size={responsiveStyles.iconSize} color={iconColor} />
-                        </View>
-                        
-                        {/* Content - responsive layout */}
-                        <View style={{ flex: 1 }}>
+                      <LinearGradient
+                        colors={gradients.card.colors}
+                        start={gradients.card.start}
+                        end={gradients.card.end}
+                        style={{
+                          borderRadius: borderRadius.lg,
+                          overflow: 'hidden',
+                          ...shadows.lg,
+                        }}
+                      >
+                        <Pressable
+                          onPress={() => markAsRead(notification.id)}
+                          style={{
+                            padding: responsiveStyles.notificationPadding,
+                            opacity: notification.is_read ? 0.7 : 1,
+                            borderWidth: 1,
+                            borderColor: notification.is_read ? colors.background.card : colors.primary.start,
+                            borderRadius: borderRadius.lg,
+                          }}
+                        >
+                                              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                          {/* Icon - responsive sizing with enhanced styling */}
                           <View style={{
-                            flexDirection: 'row',
-                            alignItems: 'flex-start',
-                            justifyContent: 'space-between',
-                            marginBottom: 4,
+                            width: isSmallScreen ? 36 : 40,
+                            height: isSmallScreen ? 36 : 40,
+                            borderRadius: isSmallScreen ? 18 : 20,
+                            backgroundColor: `${iconColor}15`,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            marginRight: isSmallScreen ? spacing.sm : spacing.sm,
+                            borderWidth: 1,
+                            borderColor: `${iconColor}25`,
+                            shadowColor: iconColor,
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 4,
+                            elevation: 3,
                           }}>
-                            <Text style={{
-                              color: 'white',
-                              fontSize: responsiveStyles.bodyFontSize + 1,
-                              fontWeight: '600',
-                              flex: 1,
-                              marginRight: 8,
-                            }} numberOfLines={isSmallScreen ? 2 : 3}>
-                              {notification.title}
-                            </Text>
-                            {!notification.is_read && (
-                              <View style={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: 4,
-                                backgroundColor: '#6C63FF',
-                                marginTop: 2,
-                              }} />
-                            )}
+                            <Ionicons name={iconName as any} size={responsiveStyles.iconSize} color={iconColor} />
                           </View>
+                        
+                                                  {/* Content - responsive layout */}
+                          <View style={{ flex: 1 }}>
+                            <View style={{
+                              flexDirection: 'row',
+                              alignItems: 'flex-start',
+                              justifyContent: 'space-between',
+                              marginBottom: spacing.xs,
+                            }}>
+                              <Text style={{
+                                color: colors.text.primary,
+                                fontSize: responsiveStyles.bodyFontSize + 1,
+                                fontWeight: typography.weights.semibold,
+                                fontFamily: typography.fonts.primary,
+                                flex: 1,
+                                marginRight: spacing.sm,
+                              }} numberOfLines={isSmallScreen ? 2 : 3}>
+                                {notification.title}
+                              </Text>
+                              {!notification.is_read && (
+                                <View style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: 4,
+                                  backgroundColor: colors.primary.start,
+                                  marginTop: 2,
+                                  shadowColor: colors.primary.glow,
+                                  shadowOffset: { width: 0, height: 0 },
+                                  shadowOpacity: 0.6,
+                                  shadowRadius: 3,
+                                  elevation: 3,
+                                }} />
+                              )}
+                            </View>
                           
                           <Text style={{
-                            color: '#B8BCC8',
+                            color: colors.text.tertiary,
                             fontSize: responsiveStyles.bodyFontSize,
                             lineHeight: responsiveStyles.bodyFontSize + 6,
-                            marginBottom: 8,
+                            marginBottom: spacing.sm,
+                            fontFamily: typography.fonts.primary,
                           }} numberOfLines={isSmallScreen ? 3 : 4}>
                             {notification.message}
                           </Text>
                           
-                          {/* Project name - responsive */}
+                          {/* Project name - responsive with enhanced styling */}
                           {projectName && (
                             <View style={{
                               flexDirection: 'row',
                               alignItems: 'center',
-                              marginBottom: 6,
+                              marginBottom: spacing.xs,
+                              backgroundColor: colors.background.card + '40',
+                              borderRadius: borderRadius.sm,
+                              paddingHorizontal: spacing.xs,
+                              paddingVertical: spacing.xs / 2,
+                              alignSelf: 'flex-start',
                             }}>
-                              <Ionicons name="folder" size={responsiveStyles.smallFontSize} color="#6B7280" />
+                              <Ionicons name="folder" size={responsiveStyles.smallFontSize} color={colors.text.muted} />
                               <Text style={{
-                                color: '#6B7280',
+                                color: colors.text.muted,
                                 fontSize: responsiveStyles.smallFontSize,
-                                marginLeft: 4,
+                                fontFamily: typography.fonts.primary,
+                                marginLeft: spacing.xs,
+                                fontWeight: typography.weights.medium,
                               }} numberOfLines={1}>
                                 {projectName}
                               </Text>
@@ -635,31 +769,43 @@ export function NotificationCenter() {
                             flexDirection: 'row',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            marginBottom: 12,
+                            marginBottom: spacing.sm,
                             flexWrap: isSmallScreen ? 'wrap' : 'nowrap',
                           }}>
                             <Text style={{
-                              color: '#6B7280',
+                              color: colors.text.muted,
                               fontSize: responsiveStyles.smallFontSize,
+                              fontFamily: typography.fonts.primary,
                             }}>
                               {formatTimeAgo(notification.created_at)}
                             </Text>
                             <View style={{
                               flexDirection: 'row',
                               alignItems: 'center',
-                              marginLeft: isSmallScreen ? 0 : 8,
-                              marginTop: isSmallScreen ? 4 : 0,
+                              marginLeft: isSmallScreen ? 0 : spacing.sm,
+                              marginTop: isSmallScreen ? spacing.xs : 0,
+                              backgroundColor: priority.color + '20',
+                              borderRadius: borderRadius.sm,
+                              paddingHorizontal: spacing.xs,
+                              paddingVertical: spacing.xs / 2,
                             }}>
                               <View style={{
                                 width: 6,
                                 height: 6,
                                 borderRadius: 3,
                                 backgroundColor: priority.color,
-                                marginRight: 4,
+                                marginRight: spacing.xs,
+                                shadowColor: priority.color,
+                                shadowOffset: { width: 0, height: 0 },
+                                shadowOpacity: 0.4,
+                                shadowRadius: 2,
+                                elevation: 2,
                               }} />
                               <Text style={{
-                                color: '#6B7280',
+                                color: priority.color,
                                 fontSize: responsiveStyles.smallFontSize - 1,
+                                fontFamily: typography.fonts.primary,
+                                fontWeight: typography.weights.medium,
                               }}>
                                 {priority.label}
                               </Text>
@@ -669,30 +815,39 @@ export function NotificationCenter() {
                           {/* Metadata sections - responsive */}
                           {suggestedAction && (
                             <View style={{
-                              backgroundColor: '#374151',
-                              borderRadius: 8,
-                              padding: isSmallScreen ? 8 : 10,
-                              marginBottom: 8,
+                              backgroundColor: colors.background.card,
+                              borderRadius: borderRadius.sm,
+                              padding: isSmallScreen ? spacing.sm : spacing.sm + 2,
+                              marginBottom: spacing.sm,
+                              borderWidth: 1,
+                              borderColor: colors.status.warning.start + '30',
+                              shadowColor: colors.status.warning.start,
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.1,
+                              shadowRadius: 4,
+                              elevation: 2,
                             }}>
                               <View style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                marginBottom: 4,
+                                marginBottom: spacing.xs,
                               }}>
-                                <Ionicons name="bulb" size={responsiveStyles.bodyFontSize} color="#F59E0B" />
+                                <Ionicons name="bulb" size={responsiveStyles.bodyFontSize} color={colors.status.warning.start} />
                                 <Text style={{
-                                  color: '#F59E0B',
+                                  color: colors.status.warning.start,
                                   fontSize: responsiveStyles.smallFontSize,
-                                  fontWeight: '600',
-                                  marginLeft: 4,
+                                  fontWeight: typography.weights.semibold,
+                                  fontFamily: typography.fonts.primary,
+                                  marginLeft: spacing.xs,
                                 }}>
                                   Sugerowane działanie
                                 </Text>
                               </View>
                               <Text style={{
-                                color: '#B8BCC8',
+                                color: colors.text.tertiary,
                                 fontSize: responsiveStyles.smallFontSize,
                                 lineHeight: responsiveStyles.smallFontSize + 4,
+                                fontFamily: typography.fonts.primary,
                               }}>
                                 {suggestedAction}
                               </Text>
@@ -701,68 +856,83 @@ export function NotificationCenter() {
 
                           {budgetImpact && (
                             <View style={{
-                              backgroundColor: budgetImpact > 0 ? '#7F1D1D' : '#14532D',
-                              borderRadius: 8,
-                              padding: isSmallScreen ? 8 : 10,
-                              marginBottom: 8,
+                              backgroundColor: budgetImpact > 0 ? colors.status.error.start + '20' : colors.status.success.start + '20',
+                              borderRadius: borderRadius.sm,
+                              padding: isSmallScreen ? spacing.sm : spacing.sm + 2,
+                              marginBottom: spacing.sm,
+                              borderWidth: 1,
+                              borderColor: budgetImpact > 0 ? colors.status.error.start + '40' : colors.status.success.start + '40',
+                              shadowColor: budgetImpact > 0 ? colors.status.error.start : colors.status.success.start,
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.1,
+                              shadowRadius: 4,
+                              elevation: 2,
                             }}>
                               <View style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                marginBottom: 4,
+                                marginBottom: spacing.xs,
                               }}>
                                 <Ionicons 
                                   name={budgetImpact > 0 ? "trending-up" : "trending-down"} 
                                   size={responsiveStyles.bodyFontSize} 
-                                  color={budgetImpact > 0 ? "#FCA5A5" : "#86EFAC"} 
+                                  color={budgetImpact > 0 ? colors.status.error.glow : colors.status.success.glow} 
                                 />
                                 <Text style={{
-                                  color: budgetImpact > 0 ? "#FCA5A5" : "#86EFAC",
+                                  color: budgetImpact > 0 ? colors.status.error.glow : colors.status.success.glow,
                                   fontSize: responsiveStyles.smallFontSize,
-                                  fontWeight: '600',
-                                  marginLeft: 4,
+                                  fontWeight: typography.weights.semibold,
+                                  fontFamily: typography.fonts.primary,
+                                  marginLeft: spacing.xs,
                                 }}>
                                   Wpływ na budżet
                                 </Text>
                               </View>
                               <Text style={{
-                                color: '#B8BCC8',
+                                color: colors.text.tertiary,
                                 fontSize: responsiveStyles.smallFontSize,
-                                fontWeight: '600',
+                                fontWeight: typography.weights.semibold,
+                                fontFamily: typography.fonts.primary,
                               }}>
                                 {budgetImpact > 0 ? '+' : ''}{budgetImpact} PLN
                               </Text>
                             </View>
                           )}
 
-                          {/* Action button - responsive */}
+                          {/* Action button - responsive with enhanced styling */}
                           {actionUrl && (
                             <Pressable 
                               onPress={() => handleNotificationAction(notification)}
                               style={{
-                                borderRadius: 8,
+                                borderRadius: borderRadius.sm,
                                 overflow: 'hidden',
-                                marginTop: 4,
+                                marginTop: spacing.xs,
+                                shadowColor: colors.primary.start,
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 8,
+                                elevation: 6,
                               }}
                             >
                               <LinearGradient
-                                colors={["#6C63FF", "#4DABF7"]}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
+                                colors={gradients.primary.colors}
+                                start={gradients.primary.start}
+                                end={gradients.primary.end}
                                 style={{
-                                  paddingHorizontal: isSmallScreen ? 12 : 16,
-                                  paddingVertical: isSmallScreen ? 8 : 10,
+                                  paddingHorizontal: isSmallScreen ? spacing.sm : spacing.md,
+                                  paddingVertical: isSmallScreen ? spacing.sm : spacing.sm + 2,
                                   flexDirection: 'row',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                 }}
                               >
-                                <Ionicons name="open" size={responsiveStyles.bodyFontSize} color="white" />
+                                <Ionicons name="open" size={responsiveStyles.bodyFontSize} color={colors.text.inverse} />
                                 <Text style={{
-                                  color: 'white',
+                                  color: colors.text.inverse,
                                   fontSize: responsiveStyles.bodyFontSize - 1,
-                                  fontWeight: '600',
-                                  marginLeft: 6,
+                                  fontWeight: typography.weights.semibold,
+                                  fontFamily: typography.fonts.primary,
+                                  marginLeft: spacing.xs,
                                 }}>
                                   {isSmallScreen ? 'Zobacz' : 'Zobacz w RenoTimeline'}
                                 </Text>
@@ -771,7 +941,9 @@ export function NotificationCenter() {
                           )}
                         </View>
                       </View>
-                    </Pressable>
+                        </Pressable>
+                      </LinearGradient>
+                    </View>
                   );
                 })
               )}

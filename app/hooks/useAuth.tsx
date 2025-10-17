@@ -1,14 +1,15 @@
 import { useState, useEffect, createContext, useContext } from 'react';
-import { supabase } from '../utils/supabase';
+import { supabase, sharedSupabase } from '../utils/supabase';
 import type { User, Session } from '@supabase/supabase-js';
-import { PushNotificationService } from '../utils/pushNotifications';
+import { StorageService } from '../utils/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, firstName?: string, lastName?: string) => Promise<{ error: any; success?: boolean }>;
+  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: any }>;
+  signUp: (email: string, password: string, firstName?: string, lastName?: string) => Promise<{ success: boolean; error?: any; message?: string }>;
   signOut: () => Promise<{ error: any }>;
   signOutGuest: () => void;
   isGuest: boolean;
@@ -36,10 +37,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('first_name, last_name')
-        .eq('user_id', userId)
+      const { data, error } = await sharedSupabase
+        .from('profiles')
+        .select('first_name, last_name, full_name')
+        .eq('id', userId)
         .single();
 
       if (!error && data) {
@@ -48,22 +49,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           lastName: data.last_name || undefined,
         });
       } else if (error) {
-        console.log('Error fetching user profile:', error);
         setUserProfile(null);
       }
     } catch (error) {
-      console.log('Error fetching user profile:', error);
+      // Silently handle error
     }
+  };
+
+  // Validate user ID format
+  const validateUserId = (userId: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(userId);
   };
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      // Handle session errors (like invalid refresh token)
+      if (error) {
+        console.log('Session error detected:', error.message);
+        // Clear invalid session
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
       setSession(session);
-      setUser(session?.user ?? null);
       
       if (session?.user) {
-        fetchUserProfile(session.user.id);
+        // Validate user ID format
+        if (!validateUserId(session.user.id)) {
+          // Don't set invalid user
+          setUser(null);
+        } else {
+          setUser(session.user);
+          fetchUserProfile(session.user.id);
+        }
+      } else {
+        setUser(null);
       }
       
       setLoading(false);
@@ -73,6 +97,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state change:', event);
+      
+      // Handle auth errors (like TOKEN_REFRESHED failure)
+      if (event === 'TOKEN_REFRESHED' && !session) {
+        console.log('Token refresh failed, signing out...');
+        // Force sign out when token refresh fails
+        setSession(null);
+        setUser(null);
+        setIsGuest(false);
+        setUserProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      // Handle sign out events
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setUser(null);
+        setIsGuest(false);
+        setUserProfile(null);
+        setLoading(false);
+        return;
+      }
+      
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -96,7 +144,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      setLoading(true);
       setError(null);
       
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -105,22 +152,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) throw error;
-
-      // Register for push notifications after successful login
-      await PushNotificationService.registerForPushNotifications();
       
       return { success: true };
     } catch (error: any) {
       setError(error.message);
       return { success: false, error: error.message };
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const createUserProfile = async (userId: string, email: string, firstName?: string, lastName?: string) => {
+    try {
+      const { error } = await sharedSupabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          email: email.toLowerCase(),
+          first_name: firstName || null,
+          last_name: lastName || null,
+          full_name: firstName && lastName ? `${firstName} ${lastName}` : null,
+        });
+
+      if (error) {
+        console.error('Error creating user profile:', error);
+      }
+    } catch (error) {
+      console.error('Error creating user profile:', error);
     }
   };
 
   const signUp = async (email: string, password: string, firstName?: string, lastName?: string) => {
     try {
-      setLoading(true);
       setError(null);
       
       const { data, error } = await supabase.auth.signUp({
@@ -136,37 +197,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
+      // Create profile in shared schema
+      if (data?.user) {
+        await createUserProfile(data.user.id, email, firstName, lastName);
+      }
+
       if (data?.user && !data?.session) {
         return { 
           success: true, 
           message: 'Sprawdź swoją skrzynkę email i potwierdź rejestrację' 
         };
       }
-
-      // Register for push notifications after successful registration
-      await PushNotificationService.registerForPushNotifications();
       
       return { success: true };
     } catch (error: any) {
       setError(error.message);
       return { success: false, error: error.message };
-    } finally {
-      setLoading(false);
     }
   };
 
   const signOut = async () => {
+    const currentUserId = user?.id;
+    
     // Force clear local state immediately
     setUser(null);
     setSession(null);
     setIsGuest(false);
     setUserProfile(null);
     
-    // Call Supabase signOut (don't wait for it or check errors)
-    supabase.auth.signOut().catch(() => {
-      // Ignore any errors from Supabase
-    });
+    // Call Supabase signOut first to invalidate the session on the server
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      // Log the error but proceed with client-side cleanup
+      console.error('Error during Supabase signOut:', error);
+    }
     
+    // Now, clear all user-specific data from local storage
+    if (currentUserId) {
+      try {
+        await StorageService.clearUserData(currentUserId);
+        console.log(`🧹 Successfully cleared data for user: ${currentUserId}`);
+      } catch (storageError) {
+        console.error('Error clearing user data from storage on logout:', storageError);
+      }
+    }
+    
+    // Also try to clear any generic auth tokens from AsyncStorage just in case
+    try {
+      // Supabase's key for the session.
+      const sessionKey = 'supabase.auth.token';
+      // This is a common library used for AsyncStorage, check if your project uses a different key.
+      const rawSession = await AsyncStorage.getItem(sessionKey);
+      if (rawSession) {
+        await AsyncStorage.removeItem(sessionKey);
+        console.log('🗑️ Forcefully removed raw session token from AsyncStorage.');
+      }
+    } catch (e) {
+      console.error('Could not forcefully remove session from AsyncStorage:', e);
+    }
+
     return { error: null };
   };
 

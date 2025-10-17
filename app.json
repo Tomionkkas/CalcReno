@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true
     },
@@ -38,17 +38,21 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#4F46E5",
-          "sounds": ["./assets/notification-sound.wav"],
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ],
           "mode": "production"
         }
-      ]
+      ],
+      "expo-web-browser",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "supabaseUrl": "https://qxyuayjpllrndylxhgoq.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4eXVheWpwbGxybmR5bHhoZ29xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkxMzQ3MjgsImV4cCI6MjA2NDcxMDcyOH0.mJRzBqsdibq2szXkkbCRgAgQ5xUvbP9SieJx__cab_k"
+      "supabaseUrl": "https://kralcmyhjvoiywcpntkg.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyYWxjbXloZnZvaXl3Y3BudGtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkxNjU5NTMsImV4cCI6MjA2NDc0MTk1M30.vSzEoJ1e3IKRPvDfq5vbGjLU7MhMJnX5Q9gMJqN8N5k"
     }
   }
 }

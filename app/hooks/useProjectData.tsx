@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { StorageService, Project, Room } from "../utils/storage";
+import { Platform } from "react-native";
+import { StorageService, Project, Room, generateUUID } from "../utils/storage";
 import { useAuth } from "./useAuth";
-import { EventDetectionService } from "../utils/eventDetection";
 
 export function useProjectData(id: string | undefined, showError: (title: string, message?: string) => void, showSuccess: (title: string, message?: string) => void, showConfirm?: (title: string, message: string, onConfirm: () => void) => void) {
   const [project, setProject] = useState<Project | null>(null);
@@ -17,8 +17,23 @@ export function useProjectData(id: string | undefined, showError: (title: string
 
     try {
       setLoading(true);
+      console.log("loadProject: Loading project", { id, isGuest, userId: user?.id, platform: Platform.OS });
       const projectData = await StorageService.getProject(id, isGuest, user?.id);
-      setProject(projectData);
+      console.log("loadProject: Project loaded", { 
+        projectId: projectData?.id, 
+        roomsCount: projectData?.rooms?.length || 0,
+        roomIds: projectData?.rooms?.map(r => r.id) || [],
+        platform: Platform.OS
+      });
+      
+      // Android-specific: Use setTimeout to ensure proper state update
+      if (Platform.OS === 'android') {
+        setTimeout(() => {
+          setProject(projectData);
+        }, 50);
+      } else {
+        setProject(projectData);
+      }
     } catch (error) {
       console.error("Error loading project:", error);
       showError("Błąd", "Nie udało się załadować projektu");
@@ -31,12 +46,25 @@ export function useProjectData(id: string | undefined, showError: (title: string
     if (!project) return;
 
     const deleteRoom = async () => {
-            const updatedProject = {
-              ...project,
-              rooms: project.rooms.filter((r) => r.id !== roomId),
-            };
-            await StorageService.updateProject(updatedProject, isGuest, user?.id);
+      try {
+        const updatedProject = {
+          ...project,
+          rooms: project.rooms.filter((r) => r.id !== roomId),
+        };
+        await StorageService.updateProject(updatedProject, isGuest, user?.id);
+        
+        // Android-specific: Use setTimeout to ensure proper state update
+        if (Platform.OS === 'android') {
+          setTimeout(() => {
             setProject(updatedProject);
+          }, 50);
+        } else {
+          setProject(updatedProject);
+        }
+      } catch (error) {
+        console.error("Error deleting room:", error);
+        showError("Błąd", "Nie udało się usunąć pomieszczenia");
+      }
     };
 
     if (showConfirm) {
@@ -56,16 +84,33 @@ export function useProjectData(id: string | undefined, showError: (title: string
     dimensions: any;
     elements: any[];
     name?: string;
+    corner?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
   }, editingRoom: Room | null) => {
     if (!project) return;
 
+    console.log("handleSaveRoom: Starting room save", {
+      editingRoomId: editingRoom?.id,
+      projectRoomsCount: project.rooms.length,
+      roomDataName: roomData.name,
+      roomDataElementsCount: roomData.elements.length,
+      platform: Platform.OS
+    });
+
     const isEditing =
       editingRoom && project.rooms.some((r) => r.id === editingRoom.id);
-    const roomId = editingRoom?.id || Date.now().toString();
+    const roomId = editingRoom?.id || generateUUID();
     const roomName =
       roomData.name ||
       editingRoom?.name ||
       `Pomieszczenie ${project.rooms.length + 1}`;
+
+    console.log("handleSaveRoom: Room info", {
+      isEditing,
+      roomId,
+      roomName,
+      existingRoomIds: project.rooms.map(r => r.id),
+      platform: Platform.OS
+    });
 
     const newRoom: Room = {
       id: roomId,
@@ -73,13 +118,16 @@ export function useProjectData(id: string | undefined, showError: (title: string
       shape: roomData.shape,
       dimensions: roomData.dimensions,
       elements: roomData.elements,
+      corner: roomData.corner,
     };
 
     let updatedRooms;
     if (isEditing) {
       updatedRooms = project.rooms.map((r) => (r.id === roomId ? newRoom : r));
+      console.log("handleSaveRoom: Editing existing room", { roomId, platform: Platform.OS });
     } else {
       updatedRooms = [...project.rooms, newRoom];
+      console.log("handleSaveRoom: Adding new room", { roomId, newRoomsCount: updatedRooms.length, platform: Platform.OS });
     }
 
     const updatedProject = {
@@ -87,10 +135,33 @@ export function useProjectData(id: string | undefined, showError: (title: string
       rooms: updatedRooms,
     };
 
-    await StorageService.updateProject(updatedProject, isGuest, user?.id);
-    setProject(updatedProject);
+    console.log("handleSaveRoom: About to save project", {
+      originalRoomsCount: project.rooms.length,
+      updatedRoomsCount: updatedRooms.length,
+      roomIds: updatedRooms.map(r => r.id),
+      platform: Platform.OS
+    });
 
-    showSuccess("Sukces", "Pomieszczenie zostało zapisane");
+    try {
+      await StorageService.updateProject(updatedProject, isGuest, user?.id);
+      
+      // Android-specific: Use setTimeout to ensure proper state update
+      if (Platform.OS === 'android') {
+        setTimeout(() => {
+          setProject(updatedProject);
+          console.log("handleSaveRoom: Android - Project state updated with delay");
+        }, 100);
+      } else {
+        setProject(updatedProject);
+        console.log("handleSaveRoom: iOS - Project state updated immediately");
+      }
+
+      console.log("handleSaveRoom: Room saved successfully");
+      showSuccess("Sukces", "Pomieszczenie zostało zapisane");
+    } catch (error) {
+      console.error("Error saving room:", error);
+      showError("Błąd", "Nie udało się zapisać pomieszczenia");
+    }
   };
 
   const handleSaveCalculation = async (calculation: any, selectedRoom: Room | null) => {
@@ -113,39 +184,26 @@ export function useProjectData(id: string | undefined, showError: (title: string
       totalCost,
     };
 
-    await StorageService.updateProject(updatedProject, isGuest, user?.id);
-    setProject(updatedProject);
-
-    // Event detection for cross-app notifications (only for logged-in users)
-    if (!isGuest && user?.id) {
-      try {
-        // Detect budget changes
-        await EventDetectionService.detectBudgetChanges(
-          updatedProject, 
-          previousTotalCost, 
-          user.id
-        );
-
-        // Detect significant cost items
-        await EventDetectionService.detectSignificantCostItem(
-          updatedProject,
-          selectedRoom.id,
-          calculation.totalCost || 0,
-          user.id
-        );
-
-        // Detect project completion
-        await EventDetectionService.detectProjectCompletion(
-          updatedProject,
-          user.id
-        );
-      } catch (error) {
-        console.warn('Event detection failed:', error);
-        // Don't fail the save operation if event detection fails
+    try {
+      await StorageService.updateProject(updatedProject, isGuest, user?.id);
+      
+      // Android-specific: Use setTimeout to ensure proper state update
+      if (Platform.OS === 'android') {
+        setTimeout(() => {
+          setProject(updatedProject);
+        }, 50);
+      } else {
+        setProject(updatedProject);
       }
-    }
 
-    showSuccess("Sukces", "Kalkulacja została zapisana");
+      // Cross-app notifications removed - only RenoTimeline→CalcReno notifications are kept
+      // CalcReno→RenoTimeline notifications disabled per user request
+
+      showSuccess("Sukces", "Kalkulacja została zapisana");
+    } catch (error) {
+      console.error("Error saving calculation:", error);
+      showError("Błąd", "Nie udało się zapisać kalkulacji");
+    }
   };
 
   return {

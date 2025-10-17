@@ -5,9 +5,13 @@ import {
   Text,
   TouchableOpacity,
   Dimensions,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Plus, Calculator, Home, Zap, X } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface OnboardingModalProps {
   visible: boolean;
@@ -16,9 +20,14 @@ interface OnboardingModalProps {
   userName?: string;
 }
 
-const { height } = Dimensions.get('window');
+const { height, width } = Dimensions.get('window');
 
 export function OnboardingModal({ visible, onClose, onCreateProject, userName }: OnboardingModalProps) {
+  const insets = useSafeAreaInsets();
+  
+  // Calculate available space considering safe areas
+  const availableHeight = height - insets.top - insets.bottom;
+  const isSmallScreen = height < 700; // For iPhone SE, etc.
   const features = [
     {
       icon: Calculator,
@@ -43,21 +52,36 @@ export function OnboardingModal({ visible, onClose, onCreateProject, userName }:
       transparent={true}
       animationType="slide"
       onRequestClose={onClose}
+      statusBarTranslucent={true}
+    >
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
     >
       <View style={{
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+          paddingHorizontal: Math.max(16, insets.left, insets.right),
+        }}>
+          <ScrollView 
+            contentContainerStyle={{
+              flexGrow: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 24,
-      }}>
+              paddingVertical: isSmallScreen ? 16 : 32,
+            }}
+            showsVerticalScrollIndicator={false}
+          >
         <LinearGradient
           colors={['#1E2139', '#2A2D4A']}
           style={{
             width: '100%',
-            maxWidth: 420,
+                maxWidth: Math.min(420, width - 32),
+                maxHeight: availableHeight - (isSmallScreen ? 32 : 64),
             borderRadius: 24,
-            padding: 32,
+                padding: isSmallScreen ? 24 : 32,
             alignItems: 'center',
             borderWidth: 1,
             borderColor: 'rgba(108, 99, 255, 0.3)',
@@ -86,25 +110,25 @@ export function OnboardingModal({ visible, onClose, onCreateProject, userName }:
           {/* Welcome Header */}
           <View style={{
             alignItems: 'center',
-            marginBottom: 32,
+            marginBottom: isSmallScreen ? 20 : 32,
             marginTop: 16,
           }}>
             <View style={{
-              width: 100,
-              height: 100,
-              borderRadius: 50,
+              width: isSmallScreen ? 80 : 100,
+              height: isSmallScreen ? 80 : 100,
+              borderRadius: isSmallScreen ? 40 : 50,
               backgroundColor: 'rgba(108, 99, 255, 0.2)',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: 20,
+              marginBottom: isSmallScreen ? 16 : 20,
               borderWidth: 2,
               borderColor: 'rgba(108, 99, 255, 0.4)',
             }}>
-              <Plus size={48} color="#6C63FF" />
+              <Plus size={isSmallScreen ? 36 : 48} color="#6C63FF" />
             </View>
             
             <Text style={{
-              fontSize: 28,
+              fontSize: isSmallScreen ? 24 : 28,
               fontWeight: 'bold',
               color: '#FFFFFF',
               textAlign: 'center',
@@ -125,26 +149,26 @@ export function OnboardingModal({ visible, onClose, onCreateProject, userName }:
           </View>
 
           {/* Features List */}
-          <View style={{ width: '100%', marginBottom: 32 }}>
+          <View style={{ width: '100%', marginBottom: isSmallScreen ? 20 : 32 }}>
             {features.map((feature, index) => (
               <View key={index} style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 backgroundColor: 'rgba(108, 99, 255, 0.1)',
                 borderRadius: 16,
-                padding: 20,
-                marginBottom: 16,
+                  padding: isSmallScreen ? 16 : 20,
+                  marginBottom: isSmallScreen ? 12 : 16,
                 borderWidth: 1,
                 borderColor: 'rgba(108, 99, 255, 0.2)',
               }}>
                 <View style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
+                  width: isSmallScreen ? 40 : 48,
+                  height: isSmallScreen ? 40 : 48,
+                  borderRadius: isSmallScreen ? 20 : 24,
                   backgroundColor: 'rgba(108, 99, 255, 0.2)',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginRight: 16,
+                  marginRight: isSmallScreen ? 12 : 16,
                 }}>
                   <feature.icon size={24} color="#6C63FF" />
                 </View>
@@ -218,7 +242,9 @@ export function OnboardingModal({ visible, onClose, onCreateProject, userName }:
             </Text>
           </TouchableOpacity>
         </LinearGradient>
+          </ScrollView>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 } 

@@ -1,12 +1,16 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { 
   View, 
   Text, 
-  Animated, 
   Dimensions, 
   TouchableOpacity,
   Modal
 } from 'react-native';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming
+} from 'react-native-reanimated';
 import { CheckCircle, AlertCircle, XCircle, X } from 'lucide-react-native';
 
 type ToastType = 'success' | 'error' | 'warning';
@@ -28,25 +32,16 @@ const CustomToast: React.FC<CustomToastProps> = ({
   onClose,
   duration = 3000
 }) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(-100)).current;
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(-100);
+  const scale = useSharedValue(1);
 
   useEffect(() => {
     if (visible) {
-      // Animate in
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 120,
-          friction: 8,
-          useNativeDriver: true,
-        })
-      ]).start();
+      // Animate in smoothly without bounce
+      opacity.value = withTiming(1, { duration: 300 });
+      translateY.value = withTiming(0, { duration: 300 });
+      scale.value = withTiming(1, { duration: 300 });
 
       // Auto dismiss
       const timer = setTimeout(() => {
@@ -55,21 +50,30 @@ const CustomToast: React.FC<CustomToastProps> = ({
 
       return () => clearTimeout(timer);
     } else {
-      // Animate out
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: -100,
-          duration: 200,
-          useNativeDriver: true,
-        })
-      ]).start();
+      // Animate out faster with scale effect
+      opacity.value = withTiming(0, { duration: 150 });
+      translateY.value = withTiming(-50, { duration: 150 });
+      scale.value = withTiming(0.95, { duration: 150 });
     }
-  }, [visible, duration, fadeAnim, slideAnim, onClose]);
+  }, [visible, duration, onClose]);
+
+  const handleBackgroundPress = () => {
+    // Immediate dismiss animation
+    opacity.value = withTiming(0, { duration: 150 });
+    translateY.value = withTiming(-50, { duration: 150 });
+    scale.value = withTiming(0.95, { duration: 150 });
+    
+    // Call onClose after animation starts
+    setTimeout(onClose, 50);
+  };
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [
+      { translateY: translateY.value },
+      { scale: scale.value }
+    ],
+  }));
 
   const getToastConfig = () => {
     switch (type) {
@@ -112,34 +116,39 @@ const CustomToast: React.FC<CustomToastProps> = ({
       animationType="none"
       statusBarTranslucent
     >
-      <View style={{
-        flex: 1,
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-        paddingTop: 60,
-        backgroundColor: 'rgba(0, 0, 0, 0.3)'
-      }}>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={handleBackgroundPress}
+        style={{
+          flex: 1,
+          justifyContent: 'flex-start',
+          alignItems: 'center',
+          paddingTop: 60,
+          backgroundColor: 'rgba(0, 0, 0, 0.3)'
+        }}
+      >
         <Animated.View
-          style={{
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-            backgroundColor: '#1F1F1F',
-            borderLeftWidth: 4,
-            borderLeftColor: config.backgroundColor,
-            borderRadius: 12,
-            marginHorizontal: 20,
-            padding: 16,
-            minWidth: Dimensions.get('window').width - 40,
-            maxWidth: Dimensions.get('window').width - 40,
-            shadowColor: '#000',
-            shadowOffset: {
-              width: 0,
-              height: 4,
+          style={[
+            {
+              backgroundColor: '#1F1F1F',
+              borderLeftWidth: 4,
+              borderLeftColor: config.backgroundColor,
+              borderRadius: 12,
+              marginHorizontal: 20,
+              padding: 16,
+              minWidth: Dimensions.get('window').width - 40,
+              maxWidth: Dimensions.get('window').width - 40,
+              shadowColor: '#000',
+              shadowOffset: {
+                width: 0,
+                height: 4,
+              },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
             },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 8,
-          }}
+            animatedStyle
+          ]}
         >
           <View style={{
             flexDirection: 'row',
@@ -183,7 +192,7 @@ const CustomToast: React.FC<CustomToastProps> = ({
             </TouchableOpacity>
           </View>
         </Animated.View>
-      </View>
+      </TouchableOpacity>
     </Modal>
   );
 };

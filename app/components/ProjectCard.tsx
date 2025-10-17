@@ -1,8 +1,11 @@
-import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, Text, TouchableOpacity, Animated } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Pin, Edit2, Trash2 } from "lucide-react-native";
+import { Pin, Edit2, Trash2, Calendar, CheckCircle } from "lucide-react-native";
 import ProjectExportButton from "./ProjectExportButton";
+import { GlassmorphicView, StatusPill } from "./ui";
+import { colors, gradients, typography, spacing, borderRadius, shadows, animations, components } from "../utils/theme";
+import { useAccessibility } from "../hooks/useAccessibility";
 import type { Project } from "../utils/storage";
 
 interface ProjectCardProps {
@@ -18,136 +21,318 @@ const ProjectCard = ({
   onDelete = () => {},
   onPin = () => {},
 }: ProjectCardProps) => {
-  // Status colors mapping
-  const statusColors = {
-    "W trakcie": "#F59E0B", // amber
-    Zakończony: "#10B981", // green
-    Wstrzymany: "#EF4444", // red
-    Planowany: "#4DABF7", // blue
+  // Professional approach: Start visible (1), animate if enabled
+  const cardAnim = useRef(new Animated.Value(1)).current;
+  const pinGlowAnim = useRef(new Animated.Value(0)).current;
+  const actionButtonAnim = useRef(new Animated.Value(0)).current;
+  
+  const { getAnimationDuration, shouldDisableAnimations, getAccessibilityProps } = useAccessibility();
+  const hasAnimated = useRef(false);
+
+  // Animate card on mount (respect accessibility preferences)
+  useEffect(() => {
+    if (hasAnimated.current) return; // Only animate once
+    hasAnimated.current = true;
+
+    if (shouldDisableAnimations()) {
+      // Already visible - do nothing
+      return;
+    }
+    
+    // Reset to 0, then animate to 1 for smooth entrance
+    cardAnim.setValue(0);
+    
+    Animated.timing(cardAnim, {
+      toValue: 1,
+      duration: getAnimationDuration('normal'),
+      useNativeDriver: true,
+    }).start();
+  }, [shouldDisableAnimations, getAnimationDuration]);
+
+  // Instant pin glow - no animation
+  useEffect(() => {
+    pinGlowAnim.setValue(project.isPinned ? 0.3 : 0);
+  }, [project.isPinned]);
+
+  const cardTranslateY = cardAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [20, 0],
+  });
+
+  const cardOpacity = cardAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  const pinGlowOpacity = pinGlowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.2, 0.5], // More subtle glow
+  });
+
+  // Status mapping
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case "W trakcie":
+        return { type: "inProgress" as const, label: "W trakcie" };
+      case "Zakończony":
+        return { type: "completed" as const, label: "Zakończony" };
+      case "Wstrzymany":
+        return { type: "paused" as const, label: "Wstrzymany" };
+      case "Planowany":
+      default:
+        return { type: "planned" as const, label: "Planowany" };
+    }
   };
 
-  const statusColor = statusColors[project.status as keyof typeof statusColors] || "#6B7280";
+  const statusConfig = getStatusConfig(project.status);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pl-PL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
 
   return (
-    <LinearGradient
-      colors={["#1E2139", "#2A2D4A"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+    <Animated.View
       style={{
-        borderRadius: 12,
-        overflow: "hidden",
-        marginBottom: 16,
-        width: "100%",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 5,
+        transform: [{ translateY: cardTranslateY }],
+        opacity: cardOpacity,
+        marginBottom: spacing.md,
       }}
     >
-      <View style={{ padding: 16 }}>
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 8,
-          }}
+      <GlassmorphicView
+        intensity="medium"
+        style={{
+          borderRadius: borderRadius.lg,
+          overflow: "hidden",
+          ...shadows.lg,
+        }}
+      >
+        <LinearGradient
+                      colors={gradients.card.colors}
+          start={gradients.card.start}
+          end={gradients.card.end}
+          style={{ padding: spacing.md }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-            <View
-              style={{
-                backgroundColor: statusColor,
-                height: 12,
-                width: 12,
-                borderRadius: 6,
-                marginRight: 8,
-              }}
-            />
-            <Text
-              style={{
-                color: "white",
-                fontWeight: "bold",
-                fontSize: 18,
-                flex: 1,
-              }}
-            >
-              {project.name}
-            </Text>
+          {/* Header Section */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
+            <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+              {/* Status Pill */}
+              <StatusPill
+                status={statusConfig.type}
+                label={statusConfig.label}
+                style={{ marginRight: spacing.sm }}
+              />
+              
+              {/* Project Title */}
+              <Text
+                style={{
+                  color: colors.text.primary,
+                  fontWeight: 'bold',
+                  fontSize: typography.sizes.lg,
+                  flex: 1,
+                  fontFamily: typography.fonts.primary,
+                }}
+                numberOfLines={1}
+              >
+                {project.name}
+              </Text>
+            </View>
+
+            {/* Pin Button with Glow Effect */}
+            <View style={{ position: 'relative' }}>
+              {project.isPinned && (
+                <Animated.View
+                  style={{
+                    position: 'absolute',
+                    top: -2,
+                    left: -2,
+                    right: -2,
+                    bottom: -2,
+                    borderRadius: borderRadius.full,
+                    backgroundColor: colors.primary.glow,
+                    opacity: pinGlowOpacity,
+                    shadowColor: colors.primary.glow,
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.3, // Reduced shadow opacity
+                    shadowRadius: 4, // Smaller shadow radius
+                    elevation: 2, // Lower elevation
+                  }}
+                />
+              )}
+              <TouchableOpacity
+                onPress={() => onPin(project.id, !project.isPinned)}
+                style={{
+                  ...components.touchTarget,
+                  padding: spacing.sm,
+                  borderRadius: borderRadius.full,
+                }}
+                activeOpacity={0.7}
+                {...getAccessibilityProps(
+                  project.isPinned ? 'Odpiń projekt' : 'Przypnij projekt',
+                  project.isPinned ? 'Usuń projekt z przypiętych' : 'Przypnij projekt do góry listy'
+                )}
+              >
+                <Pin
+                  size={20}
+                  color={project.isPinned ? colors.primary.start : colors.text.muted}
+                  fill={project.isPinned ? colors.primary.start : "transparent"}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
-          <TouchableOpacity
-            onPress={() => onPin(project.id, !project.isPinned)}
-            style={{
-              padding: 8,
-              minWidth: 44,
-              minHeight: 44,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Pin
-              size={18}
-              color={project.isPinned ? "#6C63FF" : "#6B7280"}
-              fill={project.isPinned ? "#6C63FF" : "transparent"}
-            />
-          </TouchableOpacity>
-        </View>
 
-        <View style={{ marginBottom: 12 }}>
-          <Text style={{ color: "#B8BCC8", fontSize: 14, marginBottom: 4 }}>
-            Status:{" "}
-            <Text style={{ fontWeight: "500", color: statusColor }}>
-              {project.status}
-            </Text>
-          </Text>
-          <Text style={{ color: "#B8BCC8", fontSize: 14, marginBottom: 2 }}>
-            Data rozpoczęcia: {project.startDate}
-          </Text>
-          <Text style={{ color: "#B8BCC8", fontSize: 14 }}>
-            Data zakończenia: {project.endDate}
-          </Text>
-        </View>
+          {/* Timeline-style Date Chips */}
+          <View style={{ marginBottom: spacing.md }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: spacing.xs }}>
+              <Calendar size={16} color={colors.text.muted} style={{ marginRight: spacing.xs }} />
+              <Text style={{ 
+                color: colors.text.muted, 
+                fontSize: typography.sizes.sm,
+                fontWeight: '500',
+                fontFamily: typography.fonts.primary,
+              }}>
+                Harmonogram
+              </Text>
+            </View>
+            
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              {/* Start Date Chip */}
+              <View style={{
+                backgroundColor: colors.glass.background,
+                borderWidth: 1,
+                borderColor: colors.glass.border,
+                borderRadius: borderRadius.md,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: spacing.xs,
+                marginRight: spacing.sm,
+                flex: 1,
+              }}>
+                <Text style={{
+                  color: colors.text.tertiary,
+                  fontSize: typography.sizes.xs,
+                  fontWeight: 500,
+                  fontFamily: typography.fonts.primary,
+                  marginBottom: 2,
+                }}>
+                  Rozpoczęcie
+                </Text>
+                <Text style={{
+                  color: colors.text.primary,
+                  fontSize: typography.sizes.sm,
+                  fontWeight: 600,
+                  fontFamily: typography.fonts.primary,
+                }}>
+                  {formatDate(project.startDate)}
+                </Text>
+              </View>
 
-        {/* Export button */}
-        <ProjectExportButton project={project} />
+              {/* End Date Chip */}
+              <View style={{
+                backgroundColor: colors.glass.background,
+                borderWidth: 1,
+                borderColor: colors.glass.border,
+                borderRadius: borderRadius.md,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: spacing.xs,
+                flex: 1,
+              }}>
+                <Text style={{
+                  color: colors.text.tertiary,
+                  fontSize: typography.sizes.xs,
+                  fontWeight: 500,
+                  fontFamily: typography.fonts.primary,
+                  marginBottom: 2,
+                }}>
+                  Zakończenie
+                </Text>
+                <Text style={{
+                  color: colors.text.primary,
+                  fontSize: typography.sizes.sm,
+                  fontWeight: 600,
+                  fontFamily: typography.fonts.primary,
+                }}>
+                  {formatDate(project.endDate)}
+                </Text>
+              </View>
+            </View>
+          </View>
 
-        <View
-          style={{
+          {/* Export Button */}
+          <ProjectExportButton project={project} />
+
+          {/* Action Buttons */}
+          <View style={{
             flexDirection: "row",
             justifyContent: "flex-end",
-            paddingTop: 8,
+            paddingTop: spacing.sm,
             borderTopWidth: 1,
-            borderTopColor: "#2A2D4A",
-          }}
-        >
-          <TouchableOpacity
-            onPress={() => onEdit(project.id)}
-            style={{
-              padding: 8,
-              marginRight: 8,
-              minWidth: 44,
-              minHeight: 44,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Edit2 size={18} color="#4DABF7" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => onDelete(project.id)}
-            style={{
-              padding: 8,
-              minWidth: 44,
-              minHeight: 44,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Trash2 size={18} color="#EF4444" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </LinearGradient>
+            borderTopColor: colors.glass.border,
+            marginTop: spacing.sm,
+          }}>
+            {/* Edit Button - Premium Pill Design */}
+            <TouchableOpacity
+              onPress={() => onEdit(project.id)}
+              style={{
+                flexDirection: "row",
+                backgroundColor: colors.primary.start + '20',
+                borderWidth: 1,
+                borderColor: colors.primary.start,
+                borderRadius: borderRadius.full,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.xs,
+                marginRight: spacing.sm,
+                ...components.touchTarget,
+                ...shadows.sm,
+              }}
+              activeOpacity={0.7}
+              {...getAccessibilityProps('Edytuj projekt', 'Otwórz edycję projektu')}
+            >
+              <Edit2 size={16} color={colors.primary.start} style={{ marginRight: spacing.xs }} />
+              <Text style={{
+                color: colors.primary.start,
+                fontSize: typography.sizes.sm,
+                fontWeight: 500,
+                fontFamily: typography.fonts.primary,
+              }}>
+                Edytuj
+              </Text>
+            </TouchableOpacity>
+
+            {/* Delete Button - Premium Pill Design */}
+            <TouchableOpacity
+              onPress={() => onDelete(project.id)}
+              style={{
+                flexDirection: "row",
+                backgroundColor: colors.status.error.start + '20',
+                borderWidth: 1,
+                borderColor: colors.status.error.start,
+                borderRadius: borderRadius.full,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.xs,
+                ...components.touchTarget,
+                ...shadows.sm,
+              }}
+              activeOpacity={0.7}
+              {...getAccessibilityProps('Usuń projekt', 'Usuń projekt z listy')}
+            >
+              <Trash2 size={16} color={colors.status.error.start} style={{ marginRight: spacing.xs }} />
+              <Text style={{
+                color: colors.status.error.start,
+                fontSize: typography.sizes.sm,
+                fontWeight: 500,
+                fontFamily: typography.fonts.primary,
+              }}>
+                Usuń
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </GlassmorphicView>
+    </Animated.View>
   );
 };
 

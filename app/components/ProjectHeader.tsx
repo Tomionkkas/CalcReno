@@ -1,13 +1,17 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
+  Animated,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft } from "lucide-react-native";
 import { Project } from "../utils/storage";
+import { GlassmorphicView, StatusPill } from "./ui";
+import { colors, gradients, typography, spacing, borderRadius, shadows, animations, components } from "../utils/theme";
+import { useAccessibility } from "../hooks/useAccessibility";
 
 type TabType = "rooms" | "editor" | "calculator" | "summary" | "planner";
 
@@ -24,153 +28,214 @@ export default function ProjectHeader({
   onTabChange,
   onBackPress,
 }: ProjectHeaderProps) {
+  // Always visible - no entrance animations
+  const headerAnim = useRef(new Animated.Value(1)).current;
+  const tabAnim = useRef(new Animated.Value(1)).current;
+  const backButtonAnim = useRef(new Animated.Value(1)).current;
+  
+  const { getAccessibilityProps } = useAccessibility();
+
+  // Status mapping
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case "W trakcie":
+        return { type: "inProgress" as const, label: "W trakcie" };
+      case "Zakończony":
+        return { type: "completed" as const, label: "Zakończony" };
+      case "Wstrzymany":
+        return { type: "paused" as const, label: "Wstrzymany" };
+      case "Planowany":
+      default:
+        return { type: "planned" as const, label: "Planowany" };
+    }
+  };
+
+  const statusConfig = getStatusConfig(project.status);
+
+  const headerTranslateY = headerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [20, 0],
+  });
+
+  const headerOpacity = headerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  const backButtonScale = backButtonAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.8, 1],
+  });
+
+  const backButtonOpacity = backButtonAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  const tabTranslateY = tabAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [15, 0],
+  });
+
+  const tabOpacity = tabAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  const tabs = [
+    { key: "rooms" as TabType, label: "Pomieszczenia" },
+    { key: "summary" as TabType, label: "Podsumowanie" },
+    { key: "planner" as TabType, label: "Planer 2D" },
+  ];
+
+  // Add dynamic tabs for editor and calculator
+  if (activeTab === "editor") {
+    tabs.push({ key: "editor" as TabType, label: "Edytor" });
+  }
+  if (activeTab === "calculator") {
+    tabs.push({ key: "calculator" as TabType, label: "Kalkulator" });
+  }
+
   return (
-    <LinearGradient
-      colors={["#0A0B1E", "#151829"]}
-      style={{ paddingHorizontal: 16, paddingVertical: 12 }}
+    <GlassmorphicView
+      intensity="medium"
+      style={{
+        borderBottomWidth: 1,
+        borderBottomColor: colors.glass.border,
+        ...shadows.lg,
+      }}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          marginBottom: 8,
-        }}
+      <LinearGradient
+                    colors={gradients.background.colors}
+        start={gradients.background.start}
+        end={gradients.background.end}
+        style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.md }}
       >
-        <TouchableOpacity
-          onPress={onBackPress}
-          style={{ padding: 8, marginRight: 8 }}
+        {/* Header Section */}
+        <Animated.View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginBottom: spacing.md,
+            transform: [{ translateY: headerTranslateY }],
+            opacity: headerOpacity,
+          }}
         >
-          <ArrowLeft size={24} color="white" />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: "white", fontSize: 20, fontWeight: "bold" }}>
-            {project.name}
-          </Text>
-          <Text style={{ color: "#B8BCC8", fontSize: 14 }}>
-            Status: {project.status}
-          </Text>
-        </View>
-      </View>
-
-      {/* Tab Navigation */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ marginTop: 12 }}
-      >
-        <View style={{ flexDirection: "row" }}>
-          <TouchableOpacity
-            onPress={() => onTabChange("rooms")}
+          {/* Back Button with Glow Effect */}
+          <Animated.View
             style={{
-              paddingVertical: 8,
-              paddingHorizontal: 16,
-              borderRadius: 8,
-              backgroundColor:
-                activeTab === "rooms" ? "#6C63FF" : "transparent",
-              marginRight: 8,
+              transform: [{ scale: backButtonScale }],
+              opacity: backButtonOpacity,
+              marginRight: spacing.md,
             }}
           >
-            <Text
-              style={{
-                color: activeTab === "rooms" ? "white" : "#B8BCC8",
-                textAlign: "center",
-                fontWeight: activeTab === "rooms" ? "600" : "normal",
-              }}
-            >
-              Pomieszczenia
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => onTabChange("summary")}
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 16,
-              borderRadius: 8,
-              backgroundColor:
-                activeTab === "summary" ? "#6C63FF" : "transparent",
-              marginRight: 8,
-            }}
-          >
-            <Text
-              style={{
-                color: activeTab === "summary" ? "white" : "#B8BCC8",
-                textAlign: "center",
-                fontWeight: activeTab === "summary" ? "600" : "normal",
-              }}
-            >
-              Podsumowanie
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => onTabChange("planner")}
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 16,
-              borderRadius: 8,
-              backgroundColor:
-                activeTab === "planner" ? "#6C63FF" : "transparent",
-              marginRight: 8,
-            }}
-          >
-            <Text
-              style={{
-                color: activeTab === "planner" ? "white" : "#B8BCC8",
-                textAlign: "center",
-                fontWeight: activeTab === "planner" ? "600" : "normal",
-              }}
-            >
-              Planer 2D
-            </Text>
-          </TouchableOpacity>
-
-          {activeTab === "editor" && (
             <TouchableOpacity
-              onPress={() => onTabChange("editor")}
+              onPress={onBackPress}
               style={{
-                paddingVertical: 8,
-                paddingHorizontal: 16,
-                borderRadius: 8,
-                backgroundColor: "#6C63FF",
-                marginRight: 8,
+                ...components.touchTarget,
+                padding: spacing.sm,
+                borderRadius: borderRadius.full,
+                backgroundColor: colors.glass.background,
+                borderWidth: 1,
+                borderColor: colors.glass.border,
+                ...shadows.sm,
               }}
+              activeOpacity={0.7}
+              {...getAccessibilityProps('Powrót', 'Wróć do listy projektów')}
             >
-              <Text
-                style={{
-                  color: "white",
-                  textAlign: "center",
-                  fontWeight: "600",
-                }}
-              >
-                Edytor
-              </Text>
+              <ArrowLeft size={24} color={colors.text.primary} />
             </TouchableOpacity>
-          )}
+          </Animated.View>
 
-          {activeTab === "calculator" && (
-            <TouchableOpacity
-              onPress={() => onTabChange("calculator")}
+          {/* Project Info */}
+          <View style={{ flex: 1 }}>
+            <Text
               style={{
-                paddingVertical: 8,
-                paddingHorizontal: 16,
-                borderRadius: 8,
-                backgroundColor: "#6C63FF",
+                color: colors.text.primary,
+                fontSize: typography.sizes.xl,
+                fontWeight: typography.weights.bold,
+                fontFamily: typography.fonts.primary,
+                marginBottom: spacing.xs,
               }}
+              numberOfLines={1}
             >
-              <Text
-                style={{
-                  color: "white",
-                  textAlign: "center",
-                  fontWeight: "600",
-                }}
-              >
-                Kalkulator
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </ScrollView>
-    </LinearGradient>
+              {project.name}
+            </Text>
+            
+            {/* Status with Premium Pill */}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <StatusPill
+                status={statusConfig.type}
+                label={statusConfig.label}
+                style={{ marginRight: spacing.sm }}
+              />
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* Tab Navigation */}
+        <Animated.View
+          style={{
+            transform: [{ translateY: tabTranslateY }],
+            opacity: tabOpacity,
+          }}
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingRight: spacing.md }}
+          >
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              {tabs.map((tab, index) => {
+                const isActive = activeTab === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    onPress={() => onTabChange(tab.key)}
+                    style={{
+                      paddingVertical: spacing.sm,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: borderRadius.full,
+                      backgroundColor: isActive 
+                        ? colors.primary.start + '20' 
+                        : 'transparent',
+                      borderWidth: 1,
+                      borderColor: isActive 
+                        ? colors.primary.start 
+                        : colors.glass.border,
+                      minWidth: 100,
+                      alignItems: 'center',
+                      ...components.touchTarget,
+                      ...shadows.sm,
+                    }}
+                    activeOpacity={0.7}
+                    {...getAccessibilityProps(
+                      `Przełącz na ${tab.label}`,
+                      `Otwórz zakładkę ${tab.label}`
+                    )}
+                  >
+                    <Text
+                      style={{
+                        color: isActive 
+                          ? colors.primary.start 
+                          : colors.text.tertiary,
+                        fontSize: typography.sizes.sm,
+                        fontWeight: isActive 
+                          ? typography.weights.semibold 
+                          : typography.weights.medium,
+                        fontFamily: typography.fonts.primary,
+                        textAlign: 'center',
+                      }}
+                    >
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </Animated.View>
+      </LinearGradient>
+    </GlassmorphicView>
   );
 } 
