@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -20,6 +21,7 @@ import {
   Zap,
   DollarSign,
   Info,
+  Layers,
 } from "lucide-react-native";
 import { 
   colors, 
@@ -31,6 +33,8 @@ import {
   glassmorphism,
   animations 
 } from "../utils/theme";
+import { useMaterialPrices } from "../hooks/useMaterialPrices";
+import { PricingTier } from "../utils/pricingSupabase";
 
 interface MaterialCalculatorProps {
   roomDetails?: {
@@ -71,6 +75,9 @@ const MaterialCalculator = ({
   const [useSuspendedCeiling, setUseSuspendedCeiling] = useState(false);
   const [socketsCount, setSocketsCount] = useState("4");
   const [switchesCount, setSwitchesCount] = useState("3");
+  const [selectedTier, setSelectedTier] = useState<PricingTier>("mid_range");
+  
+  const { prices: fetchedPrices, loading: pricesLoading } = useMaterialPrices(selectedTier);
 
   const [costs, setCosts] = useState({
     floorPanels: 45, // zł/m²
@@ -98,6 +105,16 @@ const MaterialCalculator = ({
     cable25: 7, // zł/m
     junctionBox: 5, // zł/szt
   });
+
+  // Update costs when fetched prices change
+  useEffect(() => {
+    if (Object.keys(fetchedPrices).length > 0) {
+      setCosts(prev => ({
+        ...prev,
+        ...fetchedPrices
+      }));
+    }
+  }, [fetchedPrices]);
 
   const toggleSection = useCallback((section: string) => {
     setExpanded((prev) => ({
@@ -580,6 +597,34 @@ const MaterialCalculator = ({
     marginRight: spacing.sm,
   }), []);
 
+  const tierSelectorStyle = useMemo(() => ({
+    flexDirection: "row" as const,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xs,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.glass.border,
+  }), []);
+
+  const tierOptionStyle = useCallback((isActive: boolean) => ({
+    flex: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: isActive ? colors.background.secondary : "transparent",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderWidth: isActive ? 1 : 0,
+    borderColor: isActive ? colors.primary.start : "transparent",
+  }), []);
+
+  const tierTextStyle = useCallback((isActive: boolean) => ({
+    color: isActive ? colors.text.primary : colors.text.secondary,
+    fontSize: typography.sizes.sm,
+    fontWeight: isActive ? typography.weights.semibold : typography.weights.regular,
+  }), []);
+
   const renderMaterialItem = useCallback((key: string) => {
     const material = result.materials[key];
     const cost = material * (costs[key as keyof typeof costs] || 0);
@@ -696,6 +741,31 @@ const MaterialCalculator = ({
                 Zapas materiałowy: {result.calculationSummary.wasteFactor}
               </Text>
             </View>
+          </View>
+
+          {/* Price Tier Selector */}
+          <View>
+             <Text style={[sectionTitleStyle, { marginBottom: spacing.sm, marginLeft: spacing.xs }]}>
+                Poziom cenowy
+             </Text>
+             <View style={tierSelectorStyle}>
+              {(['budget', 'mid_range', 'premium'] as const).map((tier) => (
+                <TouchableOpacity
+                  key={tier}
+                  style={tierOptionStyle(selectedTier === tier)}
+                  onPress={() => setSelectedTier(tier)}
+                  activeOpacity={0.7}
+                >
+                   {pricesLoading && selectedTier === tier ? (
+                      <ActivityIndicator size="small" color={colors.primary.start} />
+                   ) : (
+                      <Text style={tierTextStyle(selectedTier === tier)}>
+                        {tier === 'budget' ? 'Budżetowy' : tier === 'mid_range' ? 'Średni' : 'Premium'}
+                      </Text>
+                   )}
+                </TouchableOpacity>
+              ))}
+             </View>
           </View>
 
           {/* Floor Section */}

@@ -1,0 +1,30 @@
+<resources>
+  <color name="splashscreen_background">#0A0B1E</color>
+  <color name="iconBackground">#ffffff</color>
+  <color name="colorPrimary">#023c69</color>
+  <color name="colorPrimaryDark">#ffffff</color>
+  <color name="notification_icon_color">#4F46E5</color>
+
+  <!-- RenoTimeline Widget Colors - Premium Palette -->
+  <!-- Background layers with depth -->
+  <color name="reno_dark_bg">#0A0F1E</color>
+  <color name="reno_card_bg">#1A2332</color>
+
+  <!-- Primary accent colors -->
+  <color name="reno_primary">#6366F1</color>
+  <color name="reno_accent">#818CF8</color>
+
+  <!-- Text hierarchy for better readability -->
+  <color name="reno_text_primary">#F8FAFC</color>
+  <color name="reno_text_secondary">#CBD5E1</color>
+  <color name="reno_text_tertiary">#94A3B8</color>
+
+  <!-- Status colors with refined tones -->
+  <color name="reno_success">#22C55E</color>
+  <color name="reno_warning">#F59E0B</color>
+  <color name="reno_danger">#EF4444</color>
+
+  <!-- Border and divider colors -->
+  <color name="reno_border">#2D3B4F</color>
+  <color name="reno_divider">#1E293B</color>
+</resources>

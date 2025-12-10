@@ -16,10 +16,12 @@ interface ProjectListProps {
   onDeleteProject: (projectId: string) => void;
   onPinProject: (projectId: string) => void;
   onAddProject: () => void;
+  onStatusChange?: (projectId: string) => void;
   insets: any;
 }
 
-export default function ProjectList({
+// OPTIMIZATION: Memo the entire component to prevent unnecessary re-renders
+export default React.memo(function ProjectList({
   projects,
   loading,
   refreshing,
@@ -28,30 +30,34 @@ export default function ProjectList({
   onDeleteProject,
   onPinProject,
   onAddProject,
+  onStatusChange,
   insets,
 }: ProjectListProps) {
-  // Professional approach: Start visible (1), animate if enabled
-  const listAnim = useRef(new Animated.Value(1)).current;
   const { shouldDisableAnimations, getAnimationDuration } = useAccessibility();
-  const hasAnimated = useRef(false);
 
-  React.useEffect(() => {
-    if (hasAnimated.current) return;
-    hasAnimated.current = true;
+  // OPTIMIZATION: Memoize callback functions to prevent re-creating them on every render
+  const renderItem = React.useCallback(({ item }: { item: Project }) => (
+    <TouchableOpacity
+      onPress={() => onEditProject(item.id)}
+      activeOpacity={0.9}
+    >
+      <ProjectCard
+        project={item}
+        onEdit={() => onEditProject(item.id)}
+        onDelete={() => onDeleteProject(item.id)}
+        onPin={() => onPinProject(item.id)}
+        onStatusChange={onStatusChange ? () => onStatusChange(item.id) : undefined}
+      />
+    </TouchableOpacity>
+  ), [onEditProject, onDeleteProject, onPinProject, onStatusChange]);
 
-    if (shouldDisableAnimations()) {
-      // Already visible - do nothing
-      return;
-    }
+  // OPTIMIZATION: Use keyExtractor function to ensure stable keys
+  const keyExtractor = React.useCallback((item: Project) => item.id, []);
 
-    // Reset to 0, then animate to 1
-    listAnim.setValue(0);
-    Animated.timing(listAnim, {
-      toValue: 1,
-      duration: getAnimationDuration('normal'),
-      useNativeDriver: true,
-    }).start();
-  }, [shouldDisableAnimations, getAnimationDuration]);
+  // OPTIMIZATION: Memoize ListEmptyComponent to prevent re-creating it
+  const ListEmptyComponent = React.useMemo(() => (
+    <EmptyState onAddProject={onAddProject} />
+  ), [onAddProject]);
 
   if (loading) {
     return (
@@ -88,23 +94,11 @@ export default function ProjectList({
   }
 
   return (
-    <Animated.View
-      style={{
-        flex: 1,
-        opacity: listAnim,
-        transform: [
-          {
-            translateY: listAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [20, 0],
-            }),
-          },
-        ],
-      }}
-    >
+    <View style={{ flex: 1 }}>
       <FlatList
         data={projects}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
         contentContainerStyle={{
           padding: spacing.md,
           paddingBottom: insets.bottom + 80,
@@ -118,39 +112,20 @@ export default function ProjectList({
             progressBackgroundColor={colors.glass.background}
           />
         }
-        ListEmptyComponent={<EmptyState onAddProject={onAddProject} />}
+        ListEmptyComponent={ListEmptyComponent}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item, index }) => (
-          <Animated.View
-            style={{
-              opacity: listAnim,
-              transform: [
-                {
-                  translateY: listAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [50, 0],
-                  }),
-                },
-              ],
-            }}
-          >
-            <TouchableOpacity
-              onPress={() => onEditProject(item.id)}
-              activeOpacity={0.9}
-              style={{
-                marginBottom: index === projects.length - 1 ? 0 : spacing.sm,
-              }}
-            >
-              <ProjectCard
-                project={item}
-                onEdit={() => onEditProject(item.id)}
-                onDelete={() => onDeleteProject(item.id)}
-                onPin={() => onPinProject(item.id)}
-              />
-            </TouchableOpacity>
-          </Animated.View>
-        )}
+        // OPTIMIZATION: FlatList performance props for smooth scrolling
+        removeClippedSubviews={true} // Unmount off-screen items to reduce memory
+        maxToRenderPerBatch={10} // Render 10 items per batch for better perceived performance
+        updateCellsBatchingPeriod={50} // Update interval for batching
+        initialNumToRender={10} // Render first 10 items immediately
+        windowSize={10} // Keep 10 viewports worth of items in memory
+        getItemLayout={(data, index) => ({
+          length: 200, // Approximate item height - adjust based on your actual card height
+          offset: 200 * index,
+          index,
+        })}
       />
-    </Animated.View>
+    </View>
   );
-}
+});

@@ -7,7 +7,6 @@ import GlassmorphicView from "../../ui/GlassmorphicView";
 interface PlannerHeaderProps {
   onExport: () => void;
   hasRooms: boolean;
-  hasCaptureRef: boolean;
   isCleanMode: boolean;
   onToggleCleanMode: () => void;
 }
@@ -15,7 +14,6 @@ interface PlannerHeaderProps {
 export default function PlannerHeader({
   onExport,
   hasRooms,
-  hasCaptureRef,
   isCleanMode,
   onToggleCleanMode
 }: PlannerHeaderProps) {
@@ -113,9 +111,9 @@ export default function PlannerHeader({
                 {/* Export Button */}
                 <TouchableOpacity
                   onPress={onExport}
-                  disabled={!hasRooms || !hasCaptureRef}
+                  disabled={!hasRooms}
                   style={{
-                    backgroundColor: (!hasRooms || !hasCaptureRef)
+                    backgroundColor: !hasRooms
                       ? colors.glass.background
                       : colors.primary.start,
                     paddingHorizontal: spacing.sm,
@@ -124,7 +122,7 @@ export default function PlannerHeader({
                     minHeight: 36,
                     justifyContent: 'center',
                     alignItems: 'center',
-                    opacity: (!hasRooms || !hasCaptureRef) ? 0.6 : 1,
+                    opacity: !hasRooms ? 0.6 : 1,
                     ...shadows.sm,
                     flexShrink: 1,
                   }}
@@ -138,7 +136,7 @@ export default function PlannerHeader({
                     letterSpacing: 0.1,
                     textAlign: 'center',
                   }}>
-                    Eksport PNG
+                    Eksport SVG
                   </Text>
                 </TouchableOpacity>
               </View>

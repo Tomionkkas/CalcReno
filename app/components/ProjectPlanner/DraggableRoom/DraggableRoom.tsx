@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
-import { View, Text, TouchableOpacity, Animated } from "react-native";
-import { PanGestureHandler, State } from "react-native-gesture-handler";
+import { View, Text, TouchableOpacity } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
 import Svg, { Path, Circle, Text as SvgText } from "react-native-svg";
 import { getWallsForShape } from "../../../utils/shapeCalculations";
 import { CanvasRoom, CANVAS_WIDTH, CANVAS_HEIGHT, GRID_SIZE, METERS_TO_GRID } from "../utils/canvasCalculations";
@@ -33,45 +34,85 @@ export default function DraggableRoom({
   getRoomHeight,
   isCleanMode,
 }: DraggableRoomProps) {
-  const [localPosition, setLocalPosition] = useState({ x: room.x, y: room.y });
+  // React state for JS thread synchronization
   const [isLocalDragging, setIsLocalDragging] = useState(false);
+  
+  // Shared values for smooth animation
+  const translateX = useSharedValue(room.x);
+  const translateY = useSharedValue(room.y);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  const isDragging = useSharedValue(false);
+  
+  // Shared values for dimensions and selection state
+  const roomWidth = useSharedValue(getRoomWidth(room));
+  const roomHeight = useSharedValue(getRoomHeight(room));
+  const isSelectedShared = useSharedValue(isSelected);
 
-  const handlePanGesture = (event: any) => {
-    const { state, translationX, translationY } = event.nativeEvent;
-    
-    if (state === State.BEGAN) {
-      setIsLocalDragging(true);
-      onSelect(room.id);
-      setIsDragging(true);
-    } else if (state === State.ACTIVE) {
-      const newX = room.x + translationX;
-      const newY = room.y + translationY;
-      setLocalPosition({ x: newX, y: newY });
-    } else if (state === State.END || state === State.CANCELLED) {
-      setIsLocalDragging(false);
-      setIsDragging(false);
-      
+  // Pan gesture definition
+  const pan = Gesture.Pan()
+    .onBegin(() => {
+      startX.value = translateX.value;
+      startY.value = translateY.value;
+      isDragging.value = true;
+      runOnJS(setIsDragging)(true);
+      runOnJS(onSelect)(room.id);
+      runOnJS(setIsLocalDragging)(true);
+    })
+    .onUpdate((event) => {
+      translateX.value = startX.value + event.translationX;
+      translateY.value = startY.value + event.translationY;
+    })
+    .onEnd(() => {
       // Snap to grid and apply boundaries
-      const snappedX = snapToGrid(localPosition.x);
-      const snappedY = snapToGrid(localPosition.y);
+      const snappedX = Math.round(translateX.value / GRID_SIZE) * GRID_SIZE;
+      const snappedY = Math.round(translateY.value / GRID_SIZE) * GRID_SIZE;
       
-      const maxX = CANVAS_WIDTH - getRoomWidth(room);
-      const maxY = CANVAS_HEIGHT - getRoomHeight(room);
+      const maxX = CANVAS_WIDTH - roomWidth.value;
+      const maxY = CANVAS_HEIGHT - roomHeight.value;
       
       const finalX = Math.max(0, Math.min(snappedX, maxX));
       const finalY = Math.max(0, Math.min(snappedY, maxY));
       
-      onMove(room.id, { x: finalX, y: finalY });
-      setLocalPosition({ x: finalX, y: finalY });
-    }
-  };
+      translateX.value = withSpring(finalX);
+      translateY.value = withSpring(finalY);
+      
+      runOnJS(onMove)(room.id, { x: finalX, y: finalY });
+      runOnJS(setIsDragging)(false);
+      runOnJS(setIsLocalDragging)(false);
+      isDragging.value = false;
+    })
+    .activeOffsetX([-10, 10])
+    .activeOffsetY([-10, 10]);
 
-  // Update local position when room position changes externally
+  // Update position when room position changes externally
   React.useEffect(() => {
     if (!isLocalDragging) {
-      setLocalPosition({ x: room.x, y: room.y });
+      translateX.value = room.x;
+      translateY.value = room.y;
     }
   }, [room.x, room.y, isLocalDragging]);
+
+  // Sync dimensions when room changes
+  React.useEffect(() => {
+    roomWidth.value = getRoomWidth(room);
+    roomHeight.value = getRoomHeight(room);
+  }, [room.dimensions, room.shape, room.dimensions.width, room.dimensions.length, room.dimensions.width2, room.dimensions.length2, room.corner]);
+
+  // Sync selection state
+  React.useEffect(() => {
+    isSelectedShared.value = isSelected;
+  }, [isSelected]);
+
+  // Animated style for smooth position updates
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+    opacity: isDragging.value ? 0.8 : 1,
+    zIndex: isSelectedShared.value ? 1000 : 1,
+  }));
 
   const renderRoomShape = () => {
     const width = getRoomWidth(room);
@@ -131,9 +172,9 @@ export default function DraggableRoom({
             // Get the correct wall using the new system
             const walls = getWallsForShape("rectangle", room.dimensions);
             const wall = walls[element.wall];
-            
+
             if (!wall) return null;
-            
+
             const position = element.position / 100;
             let elementStyle: any = {
               position: "absolute",
@@ -149,20 +190,37 @@ export default function DraggableRoom({
               shadowRadius: 2,
               elevation: 2,
             };
-            
-            // Map walls correctly: 0=top, 1=right, 2=bottom, 3=left
-            if (wall.id === 0) { // Top wall (północna)
-              elementStyle.top = -4;
-              elementStyle.left = position * width - 4;
-            } else if (wall.id === 1) { // Right wall (wschodnia)
-              elementStyle.right = -4;
-              elementStyle.top = position * height - 4;
-            } else if (wall.id === 2) { // Bottom wall (południowa)
-              elementStyle.bottom = -4;
-              elementStyle.left = position * width - 4;
-            } else if (wall.id === 3) { // Left wall (zachodnia)
-              elementStyle.left = -4;
-              elementStyle.top = position * height - 4;
+
+            // Use wall startPoint and endPoint for accurate positioning
+            // This handles wall direction correctly (some walls go right-to-left or bottom-to-top)
+            if (wall.direction === 'horizontal') {
+              // Horizontal wall - interpolate X position
+              const startX = (wall.startPoint.x / 100) * METERS_TO_GRID;
+              const endX = (wall.endPoint.x / 100) * METERS_TO_GRID;
+              const elementX = startX + (endX - startX) * position;
+
+              elementStyle.left = elementX - 4;
+
+              // Determine if top or bottom wall
+              if (wall.startPoint.y === 0) {
+                elementStyle.top = -4;
+              } else {
+                elementStyle.bottom = -4;
+              }
+            } else {
+              // Vertical wall - interpolate Y position
+              const startY = (wall.startPoint.y / 100) * METERS_TO_GRID;
+              const endY = (wall.endPoint.y / 100) * METERS_TO_GRID;
+              const elementY = startY + (endY - startY) * position;
+
+              elementStyle.top = elementY - 4;
+
+              // Determine if left or right wall
+              if (wall.startPoint.x === 0) {
+                elementStyle.left = -4;
+              } else {
+                elementStyle.right = -4;
+              }
             }
 
             return <View key={`element-${index}`} style={elementStyle} />;
@@ -198,6 +256,11 @@ export default function DraggableRoom({
           break;
       }
 
+      // Calculate center of the entire L-shape bounding box for proper text centering
+      const totalWidth = mainWidth + width2;
+      const centerX = totalWidth / 2;
+      const centerY = height / 2;
+
       return (
         <Svg width={mainWidth + width2} height={height}>
           {/* L-shape outline path - dynamic based on corner */}
@@ -211,10 +274,10 @@ export default function DraggableRoom({
             strokeWidth={isSelected ? 3 : 2}
           />
           
-          {/* Room name - positioned in the main part of the L-shape */}
+          {/* Room name - centered on the entire L-shape */}
           <SvgText
-            x={mainWidth / 2}
-            y={height * 0.75}
+            x={centerX}
+            y={centerY - 6}
             fontSize="10"
             fontWeight="600"
             fill={isCleanMode ? "#000000" : "white"}
@@ -225,8 +288,8 @@ export default function DraggableRoom({
           
           {/* Dimensions */}
           <SvgText
-            x={mainWidth / 2}
-            y={height * 0.75 + 12}
+            x={centerX}
+            y={centerY + 6}
             fontSize="8"
             fill={isCleanMode ? "#6B7280" : "#B8BCC8"}
             textAnchor="middle"
@@ -239,13 +302,14 @@ export default function DraggableRoom({
             // Get the correct wall using the new system for L-shape
             const walls = getWallsForShape("l-shape", room.dimensions, corner);
             const wall = walls[element.wall];
-            
+
             if (!wall) return null;
-            
+
             const position = element.position / 100;
             let elementX = 0, elementY = 0;
-            
-            // Use the same coordinate calculation logic as calculateElementPosition
+
+            // Calculate position using linear interpolation between wall start and end points
+            // This correctly handles wall direction (right-to-left, bottom-to-top, etc.)
             if (wall.direction === 'horizontal') {
               elementX = wall.startPoint.x + (wall.endPoint.x - wall.startPoint.x) * position;
               elementY = wall.startPoint.y;
@@ -253,11 +317,11 @@ export default function DraggableRoom({
               elementX = wall.startPoint.x;
               elementY = wall.startPoint.y + (wall.endPoint.y - wall.startPoint.y) * position;
             }
-            
-            // Convert real-world coordinates to grid coordinates
+
+            // Convert real-world coordinates (cm) to grid coordinates (pixels)
             elementX = (elementX / 100) * METERS_TO_GRID;
             elementY = (elementY / 100) * METERS_TO_GRID;
-            
+
             // Ensure element stays within SVG boundaries
             const elementRadius = 4;
             elementX = Math.max(elementRadius, Math.min(elementX, mainWidth + width2 - elementRadius));
@@ -281,23 +345,18 @@ export default function DraggableRoom({
   };
 
   return (
-    <PanGestureHandler 
-      onGestureEvent={handlePanGesture}
-      onHandlerStateChange={handlePanGesture}
-      activeOffsetX={[-10, 10]}
-      activeOffsetY={[-10, 10]}
-    >
+    <GestureDetector gesture={pan}>
       <Animated.View
-        style={{
-          position: "absolute",
-          left: localPosition.x,
-          top: localPosition.y,
-          width: getRoomWidth(room),
-          height: getRoomHeight(room),
-          zIndex: isSelected ? 1000 : 1,
-          opacity: isLocalDragging ? 0.8 : 1,
-          transform: [{ scale: isLocalDragging ? 1.05 : 1 }],
-        }}
+        style={[
+          {
+            position: "absolute",
+            left: 0,
+            top: 0,
+            width: getRoomWidth(room),
+            height: getRoomHeight(room),
+          },
+          animatedStyle,
+        ]}
       >
         {/* Room click handler to prevent background deselection */}
         <TouchableOpacity
@@ -351,6 +410,6 @@ export default function DraggableRoom({
           </TouchableOpacity>
         )}
       </Animated.View>
-    </PanGestureHandler>
+    </GestureDetector>
   );
 }

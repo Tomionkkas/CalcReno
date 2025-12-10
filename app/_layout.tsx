@@ -35,8 +35,14 @@ const DarkNavigationTheme: Theme = {
   },
 };
 
+import { useWidgetSync } from "./hooks/useWidgetSync";
+
 function AppContent() {
   const { user, loading, isGuest } = useAuth();
+  
+  // Sync auth state to Android Widget
+  useWidgetSync();
+
   const [showMigration, setShowMigration] = useState(false);
   const [migrationChecked, setMigrationChecked] = useState(false);
 

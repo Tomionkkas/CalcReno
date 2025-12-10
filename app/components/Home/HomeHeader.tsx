@@ -80,35 +80,6 @@ export default function HomeHeader({
              alignItems: "flex-end",
              maxWidth: 180, // Slightly smaller to prevent overlap
            }}>
-                         {!isGuest && user?.email && (
-               <Text style={{
-                 color: colors.text.tertiary,
-                 fontSize: typography.sizes.xs,
-                 marginBottom: spacing.xs,
-                 opacity: 0.8,
-                 fontFamily: typography.fonts.primary,
-                 fontWeight: typography.weights.medium,
-                 textAlign: 'right',
-                 maxWidth: 150, // Limit text width
-               }}>
-                 {userProfile?.firstName && userProfile?.lastName 
-                   ? `${userProfile.firstName} ${userProfile.lastName}`
-                   : user.email}
-               </Text>
-             )}
-            {isGuest && (
-              <Text style={{
-                color: colors.text.tertiary,
-                fontSize: typography.sizes.xs,
-                marginBottom: spacing.xs,
-                opacity: 0.8,
-                fontFamily: typography.fonts.primary,
-                fontWeight: typography.weights.medium,
-                textAlign: 'right',
-              }}>
-                Tryb offline
-              </Text>
-            )}
                          <View style={{ flexDirection: "row", alignItems: "center" }}>
                {/* Notification Center */}
                <NotificationCenter />

@@ -1,5 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
-import { View, Text, Modal, TouchableOpacity, Animated } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Modal, TouchableOpacity } from "react-native";
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming 
+} from 'react-native-reanimated';
 import { LinearGradient } from "expo-linear-gradient";
 import { X, TrendingUp, Home, Calculator, Package, DollarSign } from "lucide-react-native";
 import { GlassmorphicView } from "../../ui";
@@ -25,36 +30,29 @@ export default function MaterialDetailsModal({
   totalCost,
 }: MaterialDetailsModalProps) {
   const [activeTab, setActiveTab] = useState<'breakdown' | 'rooms'>('breakdown');
-  const modalAnim = useRef(new Animated.Value(0)).current;
+  
+  // Reanimated animations - SDK 54 compatible
+  const modalScale = useSharedValue(0.9);
+  const modalOpacity = useSharedValue(0);
 
+  // Calculation functions - UNCHANGED
   const allMaterials = aggregateMaterials(project);
   const { roomMaterialNames, roomMaterialUnits } = getMaterialDisplayData(project);
 
   useEffect(() => {
     if (visible) {
-      Animated.timing(modalAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
+      modalScale.value = withTiming(1, { duration: 250 });
+      modalOpacity.value = withTiming(1, { duration: 250 });
     } else {
-      Animated.timing(modalAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
+      modalScale.value = withTiming(0.9, { duration: 200 });
+      modalOpacity.value = withTiming(0, { duration: 200 });
     }
   }, [visible]);
 
-  const modalScale = modalAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.8, 1],
-  });
-
-  const modalOpacity = modalAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: modalScale.value }],
+    opacity: modalOpacity.value,
+  }));
 
   const tabIcons = {
     breakdown: TrendingUp,
@@ -83,12 +81,13 @@ export default function MaterialDetailsModal({
         }}
       >
         <Animated.View
-          style={{
-            transform: [{ scale: modalScale }],
-            opacity: modalOpacity,
-            width: '100%',
-            maxWidth: 400,
-          }}
+          style={[
+            {
+              width: '100%',
+              maxWidth: 400,
+            },
+            animatedStyle
+          ]}
         >
           <GlassmorphicView intensity="heavy" style={{ borderRadius: borderRadius.xl }}>
             <LinearGradient

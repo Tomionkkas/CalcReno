@@ -65,9 +65,10 @@ export const materialCategories = {
 export interface ProjectSummaryData {
   totalCost: number;
   roomsWithMaterials: Room[];
+  totalRooms: number;
   projectProgress: number;
   projectStatus: {
-    type: 'planned' | 'completed' | 'inProgress';
+    type: 'planned' | 'completed' | 'inProgress' | 'paused';
     label: string;
     color: string;
   };
@@ -86,16 +87,26 @@ export const calculateProjectSummary = (project: Project): ProjectSummaryData =>
     return Math.round((roomsWithMaterials.length / project.rooms.length) * 100);
   };
 
+  // Use actual project status instead of calculating from progress
   const getProjectStatus = () => {
-    const progress = getProjectProgress();
-    if (progress === 0) return { type: 'planned' as const, label: 'Oczekuje', color: '#F59E0B' };
-    if (progress === 100) return { type: 'completed' as const, label: 'Ukończone', color: '#10B981' };
-    return { type: 'inProgress' as const, label: 'W trakcie', color: '#3B82F6' };
+    switch (project.status) {
+      case "Planowany":
+        return { type: 'planned' as const, label: 'Planowany', color: '#F59E0B' };
+      case "W trakcie":
+        return { type: 'inProgress' as const, label: 'W trakcie', color: '#3B82F6' };
+      case "Zakończony":
+        return { type: 'completed' as const, label: 'Zakończony', color: '#10B981' };
+      case "Wstrzymany":
+        return { type: 'paused' as const, label: 'Wstrzymany', color: '#EF4444' };
+      default:
+        return { type: 'planned' as const, label: 'Planowany', color: '#F59E0B' };
+    }
   };
 
   return {
     totalCost,
     roomsWithMaterials,
+    totalRooms: project?.rooms.length || 0,
     projectProgress: getProjectProgress(),
     projectStatus: getProjectStatus(),
   };

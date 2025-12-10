@@ -13,7 +13,7 @@ export default function CostOverviewCard({ summaryData }: CostOverviewCardProps)
   // Calculate the text content to avoid complex expressions in JSX
   const getRoomsText = () => {
     const roomsWithMaterials = summaryData.roomsWithMaterials.length;
-    const totalRooms = roomsWithMaterials + (roomsWithMaterials === 0 ? 0 : 1);
+    const totalRooms = summaryData.totalRooms;
     return `${roomsWithMaterials} z ${totalRooms} pomieszczeń z wycenami`;
   };
 

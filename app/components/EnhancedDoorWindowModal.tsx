@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { DoorOpen, Square, X, CheckCircle, AlertCircle } from "lucide-react-native";
 import { WallInfo, validateElementOnWall } from "../utils/shapeCalculations";
+import { normalizeDecimalSeparator } from "../utils/numberInput";
 import { 
   colors, 
   gradients, 
@@ -262,7 +263,7 @@ export default function EnhancedDoorWindowModal({
             <TextInput
               style={inputStyle}
               value={positionValue}
-              onChangeText={setPositionValue}
+              onChangeText={(value) => setPositionValue(normalizeDecimalSeparator(value))}
               onFocus={() => setFocusedInput("position")}
               onBlur={() => setFocusedInput(null)}
               placeholder="50"
@@ -279,7 +280,7 @@ export default function EnhancedDoorWindowModal({
             <TextInput
               style={inputStyle}
               value={positionValue}
-              onChangeText={setPositionValue}
+              onChangeText={(value) => setPositionValue(normalizeDecimalSeparator(value))}
               onFocus={() => setFocusedInput("position")}
               onBlur={() => setFocusedInput(null)}
               placeholder="1.0"
@@ -295,7 +296,7 @@ export default function EnhancedDoorWindowModal({
             <TextInput
               style={inputStyle}
               value={positionValue}
-              onChangeText={setPositionValue}
+              onChangeText={(value) => setPositionValue(normalizeDecimalSeparator(value))}
               onFocus={() => setFocusedInput("position")}
               onBlur={() => setFocusedInput(null)}
               placeholder="0.0"
@@ -630,7 +631,7 @@ export default function EnhancedDoorWindowModal({
                     <TextInput
                       style={dimensionInputStyle}
                       value={elementWidth}
-                      onChangeText={setElementWidth}
+                      onChangeText={(value) => setElementWidth(normalizeDecimalSeparator(value))}
                       onFocus={() => setFocusedInput("width")}
                       onBlur={() => setFocusedInput(null)}
                       placeholder={elementType === "door" ? "0.9" : "1.0"}
@@ -643,7 +644,7 @@ export default function EnhancedDoorWindowModal({
                     <TextInput
                       style={dimensionInputStyle}
                       value={elementHeight}
-                      onChangeText={setElementHeight}
+                      onChangeText={(value) => setElementHeight(normalizeDecimalSeparator(value))}
                       onFocus={() => setFocusedInput("height")}
                       onBlur={() => setFocusedInput(null)}
                       placeholder={elementType === "door" ? "2.0" : "1.2"}

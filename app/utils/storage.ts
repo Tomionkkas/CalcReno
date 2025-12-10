@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
+import { logger } from "./logger";
 
 // Simple UUID v4 generator for React Native
 export function generateUUID(): string {
@@ -64,6 +65,10 @@ export interface MaterialCalculation {
 const GUEST_PROJECTS_KEY = "calcreno_guest_projects";
 const USER_PROJECTS_KEY = "calcreno_user_projects";
 
+// OPTIMIZATION: Add caching layer to reduce database queries
+const PROJECT_CACHE: { [userId: string]: { projects: Project[], timestamp: number } } = {};
+const CACHE_TTL = 30000; // 30 seconds cache TTL
+
 export const StorageService = {
   getStorageKey(isGuest: boolean = false, userId?: string): string {
     if (isGuest) {
@@ -74,13 +79,22 @@ export const StorageService = {
 
   async getProjects(isGuest: boolean = false, userId?: string): Promise<Project[]> {
     try {
+      // OPTIMIZATION: Check cache first for logged-in users
+      if (!isGuest && userId) {
+        const cached = PROJECT_CACHE[userId];
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+          logger.log('[StorageService] Returning cached projects');
+          return cached.projects;
+        }
+      }
+
       const key = this.getStorageKey(isGuest, userId);
       const data = await AsyncStorage.getItem(key);
       const localProjects = data ? JSON.parse(data) : [];
-      
+
       // If user is logged in (not guest) and has no local projects, try to sync from database
       if (!isGuest && userId && localProjects.length === 0) {
-        console.log('No local projects found for logged in user, syncing from database...');
+        logger.log('No local projects found for logged in user, syncing from database...');
         const syncedProjects = await this.syncProjectsFromDatabase(userId);
         if (syncedProjects.length > 0) {
           // Save synced projects locally
@@ -88,141 +102,165 @@ export const StorageService = {
           return syncedProjects;
         }
       }
-      
+
       return localProjects;
     } catch (error) {
-      console.error("Error loading projects:", error);
+      logger.error("Error loading projects:", error);
       return [];
     }
   },
 
+  // OPTIMIZATION: Complete rewrite using PostgreSQL joins - reduces 100+ queries to 1 query
   async syncProjectsFromDatabase(userId: string): Promise<Project[]> {
     try {
-      console.log('Syncing projects from database for user:', userId);
-      
-      // Fetch projects from Supabase
+      logger.log('[StorageService] Syncing projects from database for user:', userId);
+
+      // Use PostgreSQL joins to fetch all related data in ONE query
       const { data: projectsData, error: projectsError } = await supabase
+        .schema('calcreno_schema')
         .from('calcreno_projects')
-        .select('*')
+        .select(`
+          id,
+          name,
+          description,
+          status,
+          created_at,
+          updated_at,
+          calcreno_rooms (
+            id,
+            name,
+            room_type,
+            area_sqm,
+            height_m,
+            description,
+            created_at,
+            calcreno_room_elements (
+              id,
+              element_type,
+              material,
+              area_sqm,
+              unit_cost,
+              total_cost,
+              notes,
+              created_at
+            )
+          )
+        `)
         .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50); // Limit to 50 most recent projects for faster loading
 
       if (projectsError) {
-        console.error('Error fetching projects from database:', projectsError);
+        logger.error('[StorageService] Error fetching projects from database:', projectsError);
         return [];
       }
 
       if (!projectsData || projectsData.length === 0) {
-        console.log('No projects found in database for user');
+        logger.log('[StorageService] No projects found in database for user');
         return [];
       }
 
-      console.log(`Found ${projectsData.length} projects in database`);
+      logger.log(`[StorageService] Found ${projectsData.length} projects in database`);
 
-      // Convert database format to app format
-      const projects: Project[] = [];
-      
-      for (const dbProject of projectsData) {
-        // Fetch rooms for this project
-        const { data: roomsData, error: roomsError } = await supabase
-          .from('calcreno_rooms')
-          .select('*')
-          .eq('project_id', dbProject.id)
-          .order('created_at', { ascending: true });
+      // OPTIMIZATION: Use map instead of for loops - more functional and readable
+      const projects: Project[] = projectsData.map((dbProject: any) => {
+        const rooms: Room[] = (dbProject.calcreno_rooms || []).map((dbRoom: any) => {
+          // Parse elements from joined data
+          const elements: RoomElement[] = (dbRoom.calcreno_room_elements || []).map((dbElement: any) => {
+            const notesMatch = dbElement.notes?.match(/Wall (\d+), Position (\d+)/);
+            const wall = notesMatch ? parseInt(notesMatch[1]) : 1;
+            const position = notesMatch ? parseInt(notesMatch[2]) : 0;
+            const area = dbElement.area_sqm || 1;
+            const dimension = Math.sqrt(area);
 
-        const rooms: Room[] = [];
-        
-        if (!roomsError && roomsData) {
-          for (const dbRoom of roomsData) {
-            // Fetch elements for this room
-            const { data: elementsData, error: elementsError } = await supabase
-              .from('calcreno_room_elements')
-              .select('*')
-              .eq('room_id', dbRoom.id)
-              .order('created_at', { ascending: true });
+            return {
+              id: dbElement.id,
+              type: dbElement.element_type as "door" | "window",
+              width: dimension,
+              height: dimension,
+              position,
+              wall,
+            };
+          });
 
-            const elements: RoomElement[] = [];
-            
-            if (!elementsError && elementsData) {
-              for (const dbElement of elementsData) {
-                // Parse wall and position from notes if available
-                const notesMatch = dbElement.notes?.match(/Wall (\d+), Position (\d+)/);
-                const wall = notesMatch ? parseInt(notesMatch[1]) : 1;
-                const position = notesMatch ? parseInt(notesMatch[2]) : 0;
-                
-                // Approximate width and height from area_sqm (assuming square elements)
-                const area = dbElement.area_sqm || 1;
-                const dimension = Math.sqrt(area);
-                
-                elements.push({
-                  id: dbElement.id,
-                  type: dbElement.element_type as "door" | "window",
-                  width: dimension,
-                  height: dimension,
-                  position: position,
-                  wall: wall,
-                });
-              }
+          // Parse room data from description JSON
+          let parsedDescription: any = {};
+          try {
+            if (dbRoom.description) {
+              parsedDescription = JSON.parse(dbRoom.description);
             }
-
-            // Convert area back to approximate dimensions
-            const area = dbRoom.area_sqm || 16; // Default 4x4 room
-            const side = Math.sqrt(area);
-            
-            // Determine shape from description
-            const shape = dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle';
-            
-            rooms.push({
-              id: dbRoom.id,
-              name: dbRoom.name,
-              shape: shape as "rectangle" | "l-shape",
-              dimensions: {
-                width: side,
-                height: side,
-                // For L-shape, use half dimensions for additional area
-                ...(shape === 'l-shape' && {
-                  mainWidth: side,
-                  mainHeight: side,
-                  additionalWidth: side / 2,
-                  additionalHeight: side / 2,
-                })
-              },
-              elements,
-              corner: shape === 'l-shape' ? 'bottom-left' : undefined,
-            });
+          } catch (error) {
+            logger.warn(`[StorageService] Failed to parse room description for ${dbRoom.id}:`, error);
+            parsedDescription = {
+              shape: dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle'
+            };
           }
-        }
 
-        projects.push({
+          const shape = parsedDescription.shape || (dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle');
+          const dimensions = parsedDescription.dimensions || (() => {
+            const area = dbRoom.area_sqm || 16;
+            const side = Math.sqrt(area);
+            return {
+              width: side,
+              length: side,
+              height: side,
+              ...(shape === 'l-shape' && {
+                width2: side / 2,
+                length2: side / 2,
+              })
+            };
+          })();
+
+          return {
+            id: dbRoom.id,
+            name: dbRoom.name,
+            shape: shape as "rectangle" | "l-shape",
+            dimensions,
+            elements,
+            corner: parsedDescription.corner || (shape === 'l-shape' ? 'bottom-left' : undefined),
+            materials: parsedDescription.materials || undefined,
+          };
+        });
+
+        return {
           id: dbProject.id,
           name: dbProject.name,
           description: dbProject.description || undefined,
           status: dbProject.status as any,
-          startDate: new Date().toISOString().split("T")[0], // Default to today
-          endDate: new Date().toISOString().split("T")[0], // Default to today
-          isPinned: false, // Default to not pinned
-          totalCost: 0, // Default to 0 cost
+          startDate: new Date().toISOString().split("T")[0],
+          endDate: new Date().toISOString().split("T")[0],
+          isPinned: false,
+          totalCost: 0,
           rooms,
-        });
-      }
+        };
+      });
 
-      console.log(`Successfully converted ${projects.length} projects from database`);
+      // OPTIMIZATION: Update cache
+      PROJECT_CACHE[userId] = {
+        projects,
+        timestamp: Date.now()
+      };
+
+      logger.log(`[StorageService] Successfully converted ${projects.length} projects from database`);
       return projects;
     } catch (error) {
-      console.error('Error syncing projects from database:', error);
+      logger.error('[StorageService] Error syncing projects from database:', error);
       return [];
     }
   },
 
   async forceSyncFromDatabase(userId: string): Promise<Project[]> {
     try {
+      // Clear cache to force fresh data
+      delete PROJECT_CACHE[userId];
+
       const projects = await this.syncProjectsFromDatabase(userId);
       if (projects.length > 0) {
         await this.saveProjects(projects, false, userId);
       }
       return projects;
     } catch (error) {
-      console.error('Error force syncing from database:', error);
+      logger.error('[StorageService] Error force syncing from database:', error);
       return [];
     }
   },
@@ -231,8 +269,16 @@ export const StorageService = {
     try {
       const key = this.getStorageKey(isGuest, userId);
       await AsyncStorage.setItem(key, JSON.stringify(projects));
+
+      // OPTIMIZATION: Update cache when saving
+      if (!isGuest && userId) {
+        PROJECT_CACHE[userId] = {
+          projects,
+          timestamp: Date.now()
+        };
+      }
     } catch (error) {
-      console.error("Error saving projects:", error);
+      logger.error("Error saving projects:", error);
       throw error;
     }
   },
@@ -246,10 +292,11 @@ export const StorageService = {
     // 2. If user is logged in (not guest), also add to database
     if (!isGuest && userId) {
       try {
-        console.log('Adding project to database:', project.id);
-        
+        logger.log('[StorageService] Adding project to database:', project.id);
+
         // Insert into Supabase database
         const { error } = await supabase
+          .schema('calcreno_schema')
           .from('calcreno_projects')
           .insert({
             id: project.id,
@@ -263,14 +310,14 @@ export const StorageService = {
           });
 
         if (error) {
-          console.error('Failed to add project to database:', error);
-          // Don't throw error - local addition already completed
+          logger.error('[StorageService] Failed to add project to database:', error);
         } else {
-          console.log('Project successfully added to database');
+          logger.log('[StorageService] Project successfully added to database');
+          // Clear cache to ensure fresh data on next load
+          delete PROJECT_CACHE[userId];
         }
       } catch (error) {
-        console.error('Error adding project to database:', error);
-        // Don't throw error - local addition already completed
+        logger.error('[StorageService] Error adding project to database:', error);
       }
     }
   },
@@ -287,10 +334,11 @@ export const StorageService = {
     // 2. If user is logged in (not guest), also update database
     if (!isGuest && userId) {
       try {
-        console.log('Updating project in database:', updatedProject.id);
-        
+        logger.log('[StorageService] Updating project in database:', updatedProject.id);
+
         // Update project in Supabase database
         const { error: projectError } = await supabase
+          .schema('calcreno_schema')
           .from('calcreno_projects')
           .update({
             name: updatedProject.name,
@@ -302,16 +350,18 @@ export const StorageService = {
           .eq('user_id', userId);
 
         if (projectError) {
-          console.error('Failed to update project in database:', projectError);
+          logger.error('[StorageService] Failed to update project in database:', projectError);
         } else {
-          console.log('Project successfully updated in database');
-          
+          logger.log('[StorageService] Project successfully updated in database');
+
           // Sync rooms and elements
           await this.syncRoomsToDatabase(updatedProject.id, updatedProject.rooms);
+
+          // Clear cache to ensure fresh data on next load
+          delete PROJECT_CACHE[userId];
         }
       } catch (error) {
-        console.error('Error updating project in database:', error);
-        // Don't throw error - local update already completed
+        logger.error('[StorageService] Error updating project in database:', error);
       }
     }
   },
@@ -320,12 +370,13 @@ export const StorageService = {
     try {
       // First, get existing rooms from database
       const { data: existingRooms, error: fetchError } = await supabase
+        .schema('calcreno_schema')
         .from('calcreno_rooms')
         .select('id')
         .eq('project_id', projectId);
 
       if (fetchError) {
-        console.error('Error fetching existing rooms:', fetchError);
+        logger.error('[StorageService] Error fetching existing rooms:', fetchError);
         return;
       }
 
@@ -336,12 +387,13 @@ export const StorageService = {
       const roomsToDelete = existingRoomIds.filter(id => !currentRoomIds.includes(id));
       if (roomsToDelete.length > 0) {
         const { error: deleteError } = await supabase
+          .schema('calcreno_schema')
           .from('calcreno_rooms')
           .delete()
           .in('id', roomsToDelete);
-        
+
         if (deleteError) {
-          console.error('Error deleting rooms:', deleteError);
+          logger.error('[StorageService] Error deleting rooms:', deleteError);
         }
       }
 
@@ -351,28 +403,39 @@ export const StorageService = {
         let area_sqm = 0;
         if (room.dimensions) {
           if (room.shape === 'rectangle') {
-            area_sqm = room.dimensions.width * room.dimensions.height;
-          } else if (room.shape === 'l-shape' && room.dimensions.mainWidth && room.dimensions.mainHeight) {
-            area_sqm = (room.dimensions.mainWidth * room.dimensions.mainHeight) + 
-                      (room.dimensions.additionalWidth * room.dimensions.additionalHeight);
+            area_sqm = room.dimensions.width * room.dimensions.length;
+          } else if (room.shape === 'l-shape') {
+            area_sqm = room.dimensions.width * room.dimensions.length;
+            if (room.dimensions.width2 && room.dimensions.length2) {
+              area_sqm += room.dimensions.width2 * room.dimensions.length2;
+            }
           }
         }
 
+        // Create comprehensive description with materials data
+        const roomDescription = JSON.stringify({
+          shape: room.shape,
+          dimensions: room.dimensions,
+          corner: room.corner,
+          materials: room.materials || null,
+        });
+
         const { error: roomError } = await supabase
+          .schema('calcreno_schema')
           .from('calcreno_rooms')
           .upsert({
             id: room.id,
             project_id: projectId,
             name: room.name,
-            room_type: 'general', // Default room type
+            room_type: 'general',
             area_sqm: area_sqm,
-            height_m: 2.5, // Default height
-            description: `${room.shape} room`, // Basic description
+            height_m: 2.5,
+            description: roomDescription,
             updated_at: new Date().toISOString(),
           });
 
         if (roomError) {
-          console.error(`Error upserting room ${room.id}:`, roomError);
+          logger.error(`[StorageService] Error upserting room ${room.id}:`, roomError);
           continue;
         }
 
@@ -380,7 +443,7 @@ export const StorageService = {
         await this.syncElementsToDatabase(room.id, room.elements);
       }
     } catch (error) {
-      console.error('Error syncing rooms to database:', error);
+      logger.error('[StorageService] Error syncing rooms to database:', error);
     }
   },
 
@@ -388,12 +451,13 @@ export const StorageService = {
     try {
       // First, get existing elements from database
       const { data: existingElements, error: fetchError } = await supabase
+        .schema('calcreno_schema')
         .from('calcreno_room_elements')
         .select('id')
         .eq('room_id', roomId);
 
       if (fetchError) {
-        console.error('Error fetching existing elements:', fetchError);
+        logger.error('[StorageService] Error fetching existing elements:', fetchError);
         return;
       }
 
@@ -404,29 +468,30 @@ export const StorageService = {
       const elementsToDelete = existingElementIds.filter(id => !currentElementIds.includes(id));
       if (elementsToDelete.length > 0) {
         const { error: deleteError } = await supabase
+          .schema('calcreno_schema')
           .from('calcreno_room_elements')
           .delete()
           .in('id', elementsToDelete);
-        
+
         if (deleteError) {
-          console.error('Error deleting elements:', deleteError);
+          logger.error('[StorageService] Error deleting elements:', deleteError);
         }
       }
 
       // Upsert current elements
       for (const element of elements) {
-        // Calculate area and cost for the element
         const area_sqm = (element.width || 1) * (element.height || 1);
-        const unit_cost = element.type === 'door' ? 500 : 200; // Default costs
+        const unit_cost = element.type === 'door' ? 500 : 200;
         const total_cost = area_sqm * unit_cost;
 
         const { error: elementError } = await supabase
+          .schema('calcreno_schema')
           .from('calcreno_room_elements')
           .upsert({
             id: element.id,
             room_id: roomId,
             element_type: element.type,
-            material: element.type === 'door' ? 'wood' : 'glass', // Default materials
+            material: element.type === 'door' ? 'wood' : 'glass',
             area_sqm: area_sqm,
             unit_cost: unit_cost,
             total_cost: total_cost,
@@ -435,11 +500,11 @@ export const StorageService = {
           });
 
         if (elementError) {
-          console.error(`Error upserting element ${element.id}:`, elementError);
+          logger.error(`[StorageService] Error upserting element ${element.id}:`, elementError);
         }
       }
     } catch (error) {
-      console.error('Error syncing elements to database:', error);
+      logger.error('[StorageService] Error syncing elements to database:', error);
     }
   },
 
@@ -452,30 +517,160 @@ export const StorageService = {
     // 2. If user is logged in (not guest), also delete from database
     if (!isGuest && userId) {
       try {
-        console.log('Deleting project from database:', projectId);
-        
+        logger.log('[StorageService] Deleting project from database:', projectId);
+
         // Delete from Supabase database (cascading will handle rooms and elements)
         const { error } = await supabase
+          .schema('calcreno_schema')
           .from('calcreno_projects')
           .delete()
           .eq('id', projectId)
           .eq('user_id', userId);
 
         if (error) {
-          console.error('Failed to delete project from database:', error);
-          // Don't throw error - local deletion already completed
-          // Could implement retry mechanism or show warning to user
+          logger.error('[StorageService] Failed to delete project from database:', error);
         } else {
-          console.log('Project successfully deleted from database');
+          logger.log('[StorageService] Project successfully deleted from database');
+          // Clear cache
+          delete PROJECT_CACHE[userId];
         }
       } catch (error) {
-        console.error('Error deleting project from database:', error);
-        // Don't throw error - local deletion already completed
+        logger.error('[StorageService] Error deleting project from database:', error);
       }
     }
   },
 
+  // OPTIMIZATION: Fetch single project with optimized query
   async getProject(projectId: string, isGuest: boolean = false, userId?: string): Promise<Project | null> {
+    // For logged-in users, check cache first
+    if (!isGuest && userId) {
+      const cached = PROJECT_CACHE[userId];
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        const project = cached.projects.find((p) => p.id === projectId);
+        if (project) {
+          logger.log('[StorageService] Returning cached project:', projectId);
+          return project;
+        }
+      }
+
+      // If not in cache, fetch just this one project from database (not all projects!)
+      try {
+        logger.log('[StorageService] Fetching single project from database:', projectId);
+        const { data: projectData, error: projectError } = await supabase
+          .schema('calcreno_schema')
+          .from('calcreno_projects')
+          .select(`
+            id,
+            name,
+            description,
+            status,
+            created_at,
+            updated_at,
+            calcreno_rooms (
+              id,
+              name,
+              room_type,
+              area_sqm,
+              height_m,
+              description,
+              created_at,
+              calcreno_room_elements (
+                id,
+                element_type,
+                material,
+                area_sqm,
+                unit_cost,
+                total_cost,
+                notes,
+                created_at
+              )
+            )
+          `)
+          .eq('user_id', userId)
+          .eq('id', projectId)
+          .single();
+
+        if (projectError || !projectData) {
+          logger.error('[StorageService] Error fetching project from database:', projectError);
+        } else {
+          // Convert to Project format (same logic as syncProjectsFromDatabase)
+          const dbProject: any = projectData;
+          const rooms: Room[] = (dbProject.calcreno_rooms || []).map((dbRoom: any) => {
+            const elements: RoomElement[] = (dbRoom.calcreno_room_elements || []).map((dbElement: any) => {
+              const notesMatch = dbElement.notes?.match(/Wall (\d+), Position (\d+)/);
+              const wall = notesMatch ? parseInt(notesMatch[1]) : 1;
+              const position = notesMatch ? parseInt(notesMatch[2]) : 0;
+              const area = dbElement.area_sqm || 1;
+              const dimension = Math.sqrt(area);
+
+              return {
+                id: dbElement.id,
+                type: dbElement.element_type as "door" | "window",
+                width: dimension,
+                height: dimension,
+                position,
+                wall,
+              };
+            });
+
+            let parsedDescription: any = {};
+            try {
+              if (dbRoom.description) {
+                parsedDescription = JSON.parse(dbRoom.description);
+              }
+            } catch (error) {
+              parsedDescription = {
+                shape: dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle'
+              };
+            }
+
+            const shape = parsedDescription.shape || (dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle');
+            const dimensions = parsedDescription.dimensions || (() => {
+              const area = dbRoom.area_sqm || 16;
+              const side = Math.sqrt(area);
+              return {
+                width: side,
+                length: side,
+                height: side,
+                ...(shape === 'l-shape' && {
+                  width2: side / 2,
+                  length2: side / 2,
+                })
+              };
+            })();
+
+            return {
+              id: dbRoom.id,
+              name: dbRoom.name,
+              shape: shape as "rectangle" | "l-shape",
+              dimensions,
+              elements,
+              corner: parsedDescription.corner || (shape === 'l-shape' ? 'bottom-left' : undefined),
+              materials: parsedDescription.materials || undefined,
+            };
+          });
+
+          const project: Project = {
+            id: dbProject.id,
+            name: dbProject.name,
+            description: dbProject.description || undefined,
+            status: dbProject.status as any,
+            startDate: new Date().toISOString().split("T")[0],
+            endDate: new Date().toISOString().split("T")[0],
+            isPinned: false,
+            totalCost: 0,
+            rooms,
+          };
+
+          logger.log('[StorageService] Found project in database with', project.rooms.length, 'rooms');
+          return project;
+        }
+      } catch (error) {
+        logger.error('[StorageService] Database fetch failed, falling back to local:', error);
+      }
+    }
+
+    // Fallback to local storage
     const projects = await this.getProjects(isGuest, userId);
     return projects.find((p) => p.id === projectId) || null;
   },
@@ -484,7 +679,7 @@ export const StorageService = {
     try {
       await AsyncStorage.removeItem(GUEST_PROJECTS_KEY);
     } catch (error) {
-      console.error("Error clearing guest data:", error);
+      logger.error("Error clearing guest data:", error);
     }
   },
 
@@ -493,10 +688,12 @@ export const StorageService = {
       if (userId) {
         const key = this.getStorageKey(false, userId);
         await AsyncStorage.removeItem(key);
-        console.log('Cleared local data for user:', userId);
+        // Clear cache
+        delete PROJECT_CACHE[userId];
+        logger.log('[StorageService] Cleared local data for user:', userId);
       }
     } catch (error) {
-      console.error("Error clearing user data:", error);
+      logger.error("Error clearing user data:", error);
     }
   },
 };

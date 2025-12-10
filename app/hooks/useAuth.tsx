@@ -3,6 +3,7 @@ import { supabase, sharedSupabase } from '../utils/supabase';
 import type { User, Session } from '@supabase/supabase-js';
 import { StorageService } from '../utils/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils/logger';
 
 interface AuthContextType {
   user: User | null;
@@ -67,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       // Handle session errors (like invalid refresh token)
       if (error) {
-        console.log('Session error detected:', error.message);
+        logger.log('Session error detected:', error.message);
         // Clear invalid session
         setSession(null);
         setUser(null);
@@ -97,11 +98,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state change:', event);
+      logger.log('Auth state change:', event);
       
       // Handle auth errors (like TOKEN_REFRESHED failure)
       if (event === 'TOKEN_REFRESHED' && !session) {
-        console.log('Token refresh failed, signing out...');
+        logger.log('Token refresh failed, signing out...');
         // Force sign out when token refresh fails
         setSession(null);
         setUser(null);
@@ -173,10 +174,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
       if (error) {
-        console.error('Error creating user profile:', error);
+        logger.error('Error creating user profile:', error);
       }
     } catch (error) {
-      console.error('Error creating user profile:', error);
+      logger.error('Error creating user profile:', error);
     }
   };
 
@@ -229,16 +230,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.signOut();
     if (error) {
       // Log the error but proceed with client-side cleanup
-      console.error('Error during Supabase signOut:', error);
+      logger.error('Error during Supabase signOut:', error);
     }
     
     // Now, clear all user-specific data from local storage
     if (currentUserId) {
       try {
         await StorageService.clearUserData(currentUserId);
-        console.log(`🧹 Successfully cleared data for user: ${currentUserId}`);
+        logger.log(`🧹 Successfully cleared data for user: ${currentUserId}`);
       } catch (storageError) {
-        console.error('Error clearing user data from storage on logout:', storageError);
+        logger.error('Error clearing user data from storage on logout:', storageError);
       }
     }
     
@@ -250,10 +251,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const rawSession = await AsyncStorage.getItem(sessionKey);
       if (rawSession) {
         await AsyncStorage.removeItem(sessionKey);
-        console.log('🗑️ Forcefully removed raw session token from AsyncStorage.');
+        logger.log('🗑️ Forcefully removed raw session token from AsyncStorage.');
       }
     } catch (e) {
-      console.error('Could not forcefully remove session from AsyncStorage:', e);
+      logger.error('Could not forcefully remove session from AsyncStorage:', e);
     }
 
     return { error: null };

@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Platform } from "react-native";
+import { useFocusEffect } from 'expo-router';
 import { StorageService, Project, Room, generateUUID } from "../utils/storage";
 import { useAuth } from "./useAuth";
 
@@ -8,10 +9,17 @@ export function useProjectData(id: string | undefined, showError: (title: string
   const [loading, setLoading] = useState(true);
   const { user, isGuest } = useAuth();
 
-  useEffect(() => {
-    loadProject();
-  }, [id]);
+  // Reload project data when screen gains focus (navigation back, app resume)
+  // This also handles initial load when component mounts
+  useFocusEffect(
+    React.useCallback(() => {
+      if (id) {
+        loadProject();
+      }
+    }, [id])
+  );
 
+  // OPTIMIZATION: Removed setTimeout delays - they add unnecessary latency (50-150ms per load)
   const loadProject = async () => {
     if (!id) return;
 
@@ -19,29 +27,24 @@ export function useProjectData(id: string | undefined, showError: (title: string
       setLoading(true);
       console.log("loadProject: Loading project", { id, isGuest, userId: user?.id, platform: Platform.OS });
       const projectData = await StorageService.getProject(id, isGuest, user?.id);
-      console.log("loadProject: Project loaded", { 
-        projectId: projectData?.id, 
+      console.log("loadProject: Project loaded", {
+        projectId: projectData?.id,
         roomsCount: projectData?.rooms?.length || 0,
         roomIds: projectData?.rooms?.map(r => r.id) || [],
         platform: Platform.OS
       });
-      
-      // Android-specific: Use setTimeout to ensure proper state update
-      if (Platform.OS === 'android') {
-        setTimeout(() => {
-          setProject(projectData);
-        }, 50);
-      } else {
-        setProject(projectData);
-      }
+
+      // OPTIMIZATION: Set state immediately - React handles batching automatically
+      setProject(projectData);
+      setLoading(false);
     } catch (error) {
       console.error("Error loading project:", error);
       showError("Błąd", "Nie udało się załadować projektu");
-    } finally {
       setLoading(false);
     }
   };
 
+  // OPTIMIZATION: Removed setTimeout - React batches state updates automatically
   const handleDeleteRoom = async (roomId: string) => {
     if (!project) return;
 
@@ -52,15 +55,9 @@ export function useProjectData(id: string | undefined, showError: (title: string
           rooms: project.rooms.filter((r) => r.id !== roomId),
         };
         await StorageService.updateProject(updatedProject, isGuest, user?.id);
-        
-        // Android-specific: Use setTimeout to ensure proper state update
-        if (Platform.OS === 'android') {
-          setTimeout(() => {
-            setProject(updatedProject);
-          }, 50);
-        } else {
-          setProject(updatedProject);
-        }
+
+        // OPTIMIZATION: Immediate state update - no artificial delay needed
+        setProject(updatedProject);
       } catch (error) {
         console.error("Error deleting room:", error);
         showError("Błąd", "Nie udało się usunąć pomieszczenia");
@@ -74,7 +71,6 @@ export function useProjectData(id: string | undefined, showError: (title: string
         deleteRoom
       );
     } else {
-      // Fallback - should not happen if showConfirm is properly provided
       deleteRoom();
     }
   };
@@ -144,18 +140,9 @@ export function useProjectData(id: string | undefined, showError: (title: string
 
     try {
       await StorageService.updateProject(updatedProject, isGuest, user?.id);
-      
-      // Android-specific: Use setTimeout to ensure proper state update
-      if (Platform.OS === 'android') {
-        setTimeout(() => {
-          setProject(updatedProject);
-          console.log("handleSaveRoom: Android - Project state updated with delay");
-        }, 100);
-      } else {
-        setProject(updatedProject);
-        console.log("handleSaveRoom: iOS - Project state updated immediately");
-      }
 
+      // OPTIMIZATION: Immediate state update - no artificial delay needed
+      setProject(updatedProject);
       console.log("handleSaveRoom: Room saved successfully");
       showSuccess("Sukces", "Pomieszczenie zostało zapisane");
     } catch (error) {
@@ -186,15 +173,9 @@ export function useProjectData(id: string | undefined, showError: (title: string
 
     try {
       await StorageService.updateProject(updatedProject, isGuest, user?.id);
-      
-      // Android-specific: Use setTimeout to ensure proper state update
-      if (Platform.OS === 'android') {
-        setTimeout(() => {
-          setProject(updatedProject);
-        }, 50);
-      } else {
-        setProject(updatedProject);
-      }
+
+      // OPTIMIZATION: Immediate state update - no artificial delay needed
+      setProject(updatedProject);
 
       // Cross-app notifications removed - only RenoTimeline→CalcReno notifications are kept
       // CalcReno→RenoTimeline notifications disabled per user request

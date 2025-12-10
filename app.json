@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "test-tempo",
-    "slug": "test-tempo",
+    "name": "CalcReno",
+    "slug": "calcreno",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,7 +15,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.tomionkka.testtempo"
     },
     "web": {
       "bundler": "metro",
@@ -36,11 +37,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
           "color": "#4F46E5",
-          "sounds": [
-            "./assets/notification-sound.wav"
-          ],
           "mode": "production"
         }
       ],

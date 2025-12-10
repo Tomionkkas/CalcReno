@@ -41,3 +41,30 @@ app-example
 
 **/tempobook/dynamic/
 **/tempobook/storyboards/
+
+# Development tools and configs
+.claude/
+.cursor/
+.mcp.json
+.playwright-mcp/
+
+# AI and development documentation (keep CLAUDE.md and PERFORMANCE_OPTIMIZATIONS.md)
+ai_docs/
+**/plans/
+
+# Backup and temporary files
+*.backup
+*-optimized.ts
+storage-optimized.ts
+
+# SQL migration files (already applied)
+*.sql
+
+# Old documentation files
+*_DEBUG_*.md
+*_FIX*.md
+*_COMPLETE.md
+*_README.md
+*_GUIDE.md
+TESTING_GUIDE.md
+ROOT_CAUSE_ANALYSIS.md

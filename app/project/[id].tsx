@@ -19,7 +19,7 @@ import { getWallsForShape } from "../utils/shapeCalculations";
 import ProjectHeader from "../components/ProjectHeader";
 import ProjectRoomsTab from "../components/ProjectRoomsTab";
 import ProjectSummaryTab from "../components/ProjectSummaryTab";
-import ProjectPlannerTab from "../components/ProjectPlannerTab";
+import ProjectPlannerTab from "../components/ProjectPlanner/ProjectPlannerTab";
 import AddRoomModal from "../components/AddRoomModal";
 import { useProjectData } from "../hooks/useProjectData";
 import { LinearGradient } from "expo-linear-gradient";
@@ -37,8 +37,11 @@ export default function ProjectDetailScreen() {
   const pageAnim = useRef(new Animated.Value(1)).current;
   const contentAnim = useRef(new Animated.Value(1)).current;
   
-  // Android-specific force re-render state
-  const [androidForceUpdate, setAndroidForceUpdate] = useState(0);
+  // Force re-render state (needed for both Android and iOS to ensure room list updates)
+  const [forceUpdate, setForceUpdate] = useState(0);
+  
+  // Track previous room IDs to prevent unnecessary force updates
+  const prevRoomIdsRef = useRef<string>('');
   
   const showConfirm = (title: string, message: string, onConfirm: () => void) => {
     setConfirmDialog({
@@ -72,25 +75,32 @@ export default function ProjectDetailScreen() {
     onConfirm: () => {},
   });
 
-  // Android-specific: Force re-render when project changes
+  // Force re-render when room IDs actually change (both Android and iOS)
   useEffect(() => {
-    if (Platform.OS === 'android' && project) {
-      console.log("ProjectDetailScreen: Project updated, triggering Android force update", {
-        roomsCount: project.rooms.length,
-        roomIds: project.rooms.map(r => r.id)
-      });
-      setTimeout(() => {
-        setAndroidForceUpdate(prev => prev + 1);
-      }, 100);
+    if (project) {
+      const currentRoomIds = project.rooms.map(r => r.id).sort().join(',');
+      if (currentRoomIds !== prevRoomIdsRef.current) {
+        console.log("ProjectDetailScreen: Rooms changed, triggering force update", {
+          platform: Platform.OS,
+          roomsCount: project.rooms.length,
+          roomIds: project.rooms.map(r => r.id),
+          previousIds: prevRoomIdsRef.current,
+          currentIds: currentRoomIds
+        });
+        prevRoomIdsRef.current = currentRoomIds;
+        setTimeout(() => {
+          setForceUpdate(prev => prev + 1);
+        }, Platform.OS === 'ios' ? 150 : 100); // iOS needs slightly more time
+      }
     }
-  }, [project?.rooms.length, project?.rooms.map(r => r.id).join(',')]);
+  }, [project?.rooms]);
 
-  // Android-specific: Force re-render when activeTab changes to rooms
+  // Force re-render when activeTab changes to rooms (both Android and iOS)
   useEffect(() => {
-    if (Platform.OS === 'android' && activeTab === "rooms") {
-      console.log("ProjectDetailScreen: Switching to rooms tab, triggering Android force update");
+    if (activeTab === "rooms") {
+      console.log("ProjectDetailScreen: Switching to rooms tab, triggering force update");
       setTimeout(() => {
-        setAndroidForceUpdate(prev => prev + 1);
+        setForceUpdate(prev => prev + 1);
       }, 50);
     }
   }, [activeTab]);
@@ -248,6 +258,7 @@ export default function ProjectDetailScreen() {
       case "rooms":
         return (
           <ProjectRoomsTab
+            key={`rooms-tab-${forceUpdate}`}
             project={project}
             onAddRoom={handleAddRoom}
             onEditRoom={handleEditRoomById}
@@ -291,6 +302,7 @@ export default function ProjectDetailScreen() {
       default:
         return (
           <ProjectRoomsTab
+            key={`rooms-tab-default-${forceUpdate}`}
             project={project}
             onAddRoom={handleAddRoom}
             onEditRoom={handleEditRoomById}

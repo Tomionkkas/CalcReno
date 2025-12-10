@@ -1,17 +1,10 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { View, ScrollView, Text, TouchableOpacity, Dimensions, Alert, Animated } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Project, Room } from "../../utils/storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { getWallsForShape } from "../../utils/shapeCalculations";
-// @ts-ignore - react-native-view-shot types
-let captureRef: any;
-try {
-  captureRef = require("react-native-view-shot").captureRef;
-} catch (error) {
-  console.log("react-native-view-shot not available");
-}
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import PlannerHeader from "./components/PlannerHeader";
 import CanvasContainer from "./components/CanvasContainer";
@@ -21,6 +14,7 @@ import RoomControls from "./components/RoomControls";
 import DraggableRoom from "./DraggableRoom/DraggableRoom";
 import { CanvasRoom, CANVAS_WIDTH, CANVAS_HEIGHT, GRID_SIZE, METERS_TO_GRID } from "./utils/canvasCalculations";
 import { spacing, borderRadius, colors, typography, shadows, animations } from "../../utils/theme";
+import { generateSVG } from "./utils/svgExportUtils";
 
 interface ProjectPlannerTabProps {
   project: Project;
@@ -37,8 +31,14 @@ export default function ProjectPlannerTab({
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isCleanMode, setIsCleanMode] = useState(false);
-  const canvasRef = useRef<View>(null);
-  const emptyStateAnim = useRef(new Animated.Value(0)).current;
+  const emptyStateAnim = React.useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    console.log('🔵 ProjectPlannerTab MOUNTED');
+    return () => {
+        console.log('🔴 ProjectPlannerTab UNMOUNTED');
+    };
+  }, []);
 
   // Animate empty state on mount
   React.useEffect(() => {
@@ -98,47 +98,51 @@ export default function ProjectPlannerTab({
     setIsCleanMode(!isCleanMode);
   };
 
-  const exportToPNG = async () => {
-    if (!captureRef) {
-      Alert.alert("Eksport niedostępny", "Funkcja eksportu PNG nie jest dostępna w tym środowisku");
-      return;
-    }
-
-    if (!canvasRef.current) {
-      Alert.alert("Błąd eksportu", "Nie można znaleźć płótna do eksportu");
+  const exportToSVG = async () => {
+    console.log('🔵 Export button pressed - generating SVG');
+    
+    if (canvasRooms.length === 0) {
+      Alert.alert("Błąd eksportu", "Brak pomieszczeń do wyeksportowania");
       return;
     }
 
     try {
-      const uri = await captureRef(canvasRef.current, {
-        format: "png",
-        quality: 1.0,
-        result: "tmpfile",
-      });
-
-      const fileName = `${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_plan.png`;
-      const fileUri = FileSystem.documentDirectory + fileName;
+      // Generate SVG from canvas data
+      const svgContent = generateSVG(canvasRooms, project.name, isCleanMode);
       
-      await FileSystem.moveAsync({
-        from: uri,
-        to: fileUri,
+      // Create file name
+      const fileName = `${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_plan.svg`;
+      const fileUri = (FileSystem.documentDirectory || '') + fileName;
+      
+      // Write SVG to file
+      await FileSystem.writeAsStringAsync(fileUri, svgContent, {
+        encoding: 'utf8',
       });
 
+      console.log('✅ SVG file created:', fileUri);
+
+      // Share the file
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
-          UTI: '.png',
-          mimeType: 'image/png',
+          UTI: '.svg',
+          mimeType: 'image/svg+xml',
         });
       } else {
         Alert.alert("Sukces", `Plan zapisany w: ${fileUri}`);
       }
     } catch (error) {
-      Alert.alert("Błąd eksportu", "Nie udało się wyeksportować planu do PNG");
+      console.error("❌ Export error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Nieznany błąd";
+      Alert.alert("Błąd eksportu", `Nie udało się wyeksportować planu do SVG: ${errorMessage}`);
     }
   };
 
   const handleSelectRoom = (roomId: string) => {
     setSelectedRoomId(roomId);
+    // Reset dragging when selecting a different room
+    if (selectedRoomId !== roomId) {
+      setIsDragging(false);
+    }
   };
 
   const handleMoveRoom = (roomId: string, position: { x: number; y: number }) => {
@@ -147,29 +151,28 @@ export default function ProjectPlannerTab({
 
   const handleRemoveRoom = (roomId: string) => {
     removeRoomFromCanvas(roomId);
+    // Reset dragging state when room is removed to restore scrolling
+    setIsDragging(false);
   };
 
   return (
-    <ScrollView 
-      style={{ flex: 1, padding: spacing.md }}
-      scrollEnabled={!isDragging}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={{ marginBottom: spacing.lg }}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ScrollView 
+        style={{ flex: 1, padding: spacing.md }}
+        scrollEnabled={!isDragging}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: spacing.xl }}
+      >
         {/* Header */}
         <PlannerHeader 
-          onExport={exportToPNG}
+          onExport={exportToSVG}
           hasRooms={canvasRooms.length > 0}
-          hasCaptureRef={!!captureRef}
           isCleanMode={isCleanMode}
           onToggleCleanMode={toggleCleanMode}
         />
-
-        {/* Canvas Container */}
-        <CanvasContainer isCleanMode={isCleanMode}>
-          <GestureHandlerRootView style={{ flex: 1 }}>
+          {/* Canvas */}
+          <View style={{ alignItems: 'center', marginVertical: spacing.lg }}>
             <View
-              ref={canvasRef}
               style={{
                 backgroundColor: isCleanMode ? "#FFFFFF" : "#0A0B1E",
                 borderRadius: borderRadius.lg,
@@ -181,7 +184,6 @@ export default function ProjectPlannerTab({
                 borderStyle: canvasRooms.length === 0 ? "dashed" : "solid",
                 overflow: "hidden",
                 ...shadows.md,
-                alignSelf: 'center',
               }}
             >
                 {/* Project title in clean mode */}
@@ -325,9 +327,8 @@ export default function ProjectPlannerTab({
                   </Text>
                 </View>
               )}
-            </View>
-          </GestureHandlerRootView>
-        </CanvasContainer>
+          </View>
+        </View>
 
         {/* Legend */}
         <CanvasLegend 
@@ -346,7 +347,7 @@ export default function ProjectPlannerTab({
           }}
           isCleanMode={isCleanMode}
         />
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </GestureHandlerRootView>
   );
 }

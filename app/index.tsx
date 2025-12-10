@@ -1,9 +1,14 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   StatusBar,
-  Animated,
+  Platform,
 } from "react-native";
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming 
+} from 'react-native-reanimated';
 import { LinearGradient } from "expo-linear-gradient";
 import CustomToast from "./components/CustomToast";
 import { useToast } from "./hooks/useToast";
@@ -22,6 +27,7 @@ import { SettingsScreen } from "./components/Settings/SettingsScreen";
 import { useProjects } from "./hooks/useProjects";
 import { useSearchFilter } from "./hooks/useSearchFilter";
 import { useHomeNavigation } from "./hooks/useHomeNavigation";
+import { Project } from "./utils/storage";
 
 // Import new components
 import HomeHeader from "./components/Home/HomeHeader";
@@ -31,15 +37,16 @@ import SortDropdown from "./components/Home/SortDropdown";
 import ProjectList from "./components/Home/ProjectList";
 import FloatingActionButton from "./components/Home/FloatingActionButton";
 import AddProjectModal from "./components/Home/AddProjectModal";
+import StatusChangeModal from "./components/Home/StatusChangeModal";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { user, signOut, signOutGuest, isGuest, userProfile, needsOnboarding, setNeedsOnboarding } = useAuth();
   const { toastConfig, isVisible, showError, showSuccess, hideToast } = useToast();
   
-  // Animation refs for micro-interactions
-  const screenAnim = useRef(new Animated.Value(0)).current;
-  const backgroundAnim = useRef(new Animated.Value(0)).current;
+  // Reanimated animations for smooth screen entrance
+  const screenOpacity = useSharedValue(0);
+  const screenTranslateY = useSharedValue(10);
 
   // Initialize push notifications
   usePushNotifications();
@@ -54,6 +61,7 @@ export default function HomeScreen() {
     addProject,
     deleteProject,
     togglePinProject,
+    updateProjectStatus,
     sortProjects,
   } = useProjects({ user, isGuest, needsOnboarding, setNeedsOnboarding });
 
@@ -97,29 +105,29 @@ export default function HomeScreen() {
     }, [loadProjects]),
   );
 
-  // Animate screen on mount and when user changes (login/logout)
+  // CRITICAL FIX: Reload projects when auth state changes (iOS issue)
   useEffect(() => {
-    // Reset animations when user changes
-    screenAnim.setValue(0);
-    backgroundAnim.setValue(0);
-    setAnimationStarted(false);
-    
-    // Instant screen animations - no wasted time
-    Animated.parallel([
-      Animated.timing(screenAnim, {
-        toValue: 1,
-        duration: 120, // Instant screen load
-        useNativeDriver: true,
-      }),
-      Animated.timing(backgroundAnim, {
-        toValue: 1,
-        duration: 140, // Instant background
-        useNativeDriver: false,
-      }),
-    ]).start(() => {
-      setAnimationStarted(true);
+    console.log('[HomeScreen] Auth state changed - reloading projects', { 
+      userId: user?.id, 
+      isGuest, 
+      platform: Platform.OS 
     });
-  }, [user?.id]); // Re-trigger animation when user changes
+    loadProjects();
+  }, [user?.id, isGuest, loadProjects]);
+
+  // Animate screen only after projects are loaded
+  useEffect(() => {
+    if (!loading) {
+      // Animate only after projects are loaded
+      screenOpacity.value = withTiming(1, { duration: 300 });
+      screenTranslateY.value = withTiming(0, { duration: 300 });
+    }
+  }, [loading]);
+
+  const screenAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: screenOpacity.value,
+    transform: [{ translateY: screenTranslateY.value }],
+  }));
 
   const handleSaveProject = async (projectData: {
     name: string;
@@ -131,6 +139,16 @@ export default function HomeScreen() {
     if (!projectData.name.trim()) {
       showError("Błąd", "Nazwa projektu jest wymagana");
       return;
+    }
+
+    // Validate dates
+    if (projectData.startDate && projectData.endDate) {
+      const start = new Date(projectData.startDate);
+      const end = new Date(projectData.endDate);
+      if (start >= end) {
+        showError("Błąd", "Data zakończenia musi być późniejsza niż data rozpoczęcia");
+        return;
+      }
     }
 
     const result = await addProject(projectData);
@@ -171,41 +189,37 @@ export default function HomeScreen() {
     }
   };
 
+  // Status change modal state
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [projectToChangeStatus, setProjectToChangeStatus] = useState<Project | null>(null);
+
+  const handleStatusChangeClick = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (project) {
+      setProjectToChangeStatus(project);
+      setShowStatusModal(true);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: Project["status"]) => {
+    if (!projectToChangeStatus) return;
+
+    const result = await updateProjectStatus(projectToChangeStatus.id, newStatus);
+    if (result.success) {
+      showSuccess("Sukces", "Status projektu został zmieniony");
+      setShowStatusModal(false);
+      setProjectToChangeStatus(null);
+    } else {
+      showError("Błąd", "Nie udało się zmienić statusu projektu");
+    }
+  };
+
   const handleSortProjects = (sortType: string) => {
     sortProjects(sortType);
   };
 
 
 
-  // Add a state to track if initial animation has started
-  const [animationStarted, setAnimationStarted] = useState(false);
-
-  // Animate screen on mount and when user changes (login/logout)
-  useEffect(() => {
-    // Reset animations when user changes
-    screenAnim.setValue(0);
-    backgroundAnim.setValue(0);
-    setAnimationStarted(false);
-    
-    // Instant screen animations - no wasted time
-    Animated.parallel([
-      Animated.timing(screenAnim, {
-        toValue: 1,
-        duration: 120, // Instant screen load
-        useNativeDriver: true,
-      }),
-      Animated.timing(backgroundAnim, {
-        toValue: 1,
-        duration: 140, // Instant background
-        useNativeDriver: false,
-      }),
-    ]).start(() => {
-      setAnimationStarted(true);
-    });
-  }, [user?.id]); // Re-trigger animation when user changes
-
-  // Always show with dark background to prevent white flash - removed loading condition
-  // The screen now renders immediately with proper dark background
 
   return (
     <View style={{ 
@@ -214,18 +228,10 @@ export default function HomeScreen() {
       paddingTop: insets.top,
     }}>
     <Animated.View 
-      style={{ 
-        flex: 1,
-        opacity: animationStarted ? screenAnim : 1, // Show immediately if animation not started
-        transform: [
-          {
-            translateY: animationStarted ? screenAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [2, 0], // Nearly instant appearance
-            }) : 0,
-          },
-        ],
-      }}
+      style={[
+        { flex: 1 },
+        screenAnimatedStyle
+      ]}
     >
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
       
@@ -290,6 +296,7 @@ export default function HomeScreen() {
         }}
         onPinProject={handleTogglePin}
         onAddProject={handleAddProject}
+        onStatusChange={handleStatusChangeClick}
         insets={insets}
       />
 
@@ -304,6 +311,19 @@ export default function HomeScreen() {
         onClose={closeAddModal}
         onSave={handleSaveProject}
       />
+
+      {/* Status Change Modal */}
+      {projectToChangeStatus && (
+        <StatusChangeModal
+          visible={showStatusModal}
+          currentStatus={projectToChangeStatus.status}
+          onClose={() => {
+            setShowStatusModal(false);
+            setProjectToChangeStatus(null);
+          }}
+          onStatusChange={handleStatusChange}
+        />
+      )}
 
       {/* Custom Toast */}
       {toastConfig && (

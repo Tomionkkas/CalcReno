@@ -1,5 +1,10 @@
-import React, { useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, Animated } from "react-native";
+import React, { useEffect, useRef, useMemo } from "react";
+import { View, Text, TouchableOpacity } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming
+} from 'react-native-reanimated';
 import { LinearGradient } from "expo-linear-gradient";
 import { Pin, Edit2, Trash2, Calendar, CheckCircle } from "lucide-react-native";
 import ProjectExportButton from "./ProjectExportButton";
@@ -13,65 +18,27 @@ interface ProjectCardProps {
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onPin?: (id: string, isPinned: boolean) => void;
+  onStatusChange?: (id: string) => void;
 }
 
-const ProjectCard = ({
+// OPTIMIZATION: Memo the ProjectCard to prevent unnecessary re-renders
+const ProjectCard = React.memo(({
   project,
   onEdit = () => {},
   onDelete = () => {},
   onPin = () => {},
+  onStatusChange = () => {},
 }: ProjectCardProps) => {
-  // Professional approach: Start visible (1), animate if enabled
-  const cardAnim = useRef(new Animated.Value(1)).current;
-  const pinGlowAnim = useRef(new Animated.Value(0)).current;
-  const actionButtonAnim = useRef(new Animated.Value(0)).current;
-  
-  const { getAnimationDuration, shouldDisableAnimations, getAccessibilityProps } = useAccessibility();
-  const hasAnimated = useRef(false);
+  // OPTIMIZATION: Disable entrance animations - they cause re-renders and slow down lists
+  // Cards are now instantly visible for better perceived performance
+  const { shouldDisableAnimations, getAccessibilityProps } = useAccessibility();
 
-  // Animate card on mount (respect accessibility preferences)
-  useEffect(() => {
-    if (hasAnimated.current) return; // Only animate once
-    hasAnimated.current = true;
+  // OPTIMIZATION: Memoize pin glow value to prevent recalculations
+  const pinGlowOpacity = useMemo(() => project.isPinned ? 0.3 : 0, [project.isPinned]);
 
-    if (shouldDisableAnimations()) {
-      // Already visible - do nothing
-      return;
-    }
-    
-    // Reset to 0, then animate to 1 for smooth entrance
-    cardAnim.setValue(0);
-    
-    Animated.timing(cardAnim, {
-      toValue: 1,
-      duration: getAnimationDuration('normal'),
-      useNativeDriver: true,
-    }).start();
-  }, [shouldDisableAnimations, getAnimationDuration]);
-
-  // Instant pin glow - no animation
-  useEffect(() => {
-    pinGlowAnim.setValue(project.isPinned ? 0.3 : 0);
-  }, [project.isPinned]);
-
-  const cardTranslateY = cardAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [20, 0],
-  });
-
-  const cardOpacity = cardAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
-  const pinGlowOpacity = pinGlowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.2, 0.5], // More subtle glow
-  });
-
-  // Status mapping
-  const getStatusConfig = (status: string) => {
-    switch (status) {
+  // OPTIMIZATION: Memoize status config to prevent recalculating on every render
+  const statusConfig = useMemo(() => {
+    switch (project.status) {
       case "W trakcie":
         return { type: "inProgress" as const, label: "W trakcie" };
       case "Zakończony":
@@ -82,27 +49,29 @@ const ProjectCard = ({
       default:
         return { type: "planned" as const, label: "Planowany" };
     }
-  };
+  }, [project.status]);
 
-  const statusConfig = getStatusConfig(project.status);
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+  // OPTIMIZATION: Memoize formatted dates to avoid recalculating on every render
+  const formattedStartDate = useMemo(() => {
+    const date = new Date(project.startDate);
     return date.toLocaleDateString('pl-PL', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
     });
-  };
+  }, [project.startDate]);
+
+  const formattedEndDate = useMemo(() => {
+    const date = new Date(project.endDate);
+    return date.toLocaleDateString('pl-PL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  }, [project.endDate]);
 
   return (
-    <Animated.View
-      style={{
-        transform: [{ translateY: cardTranslateY }],
-        opacity: cardOpacity,
-        marginBottom: spacing.md,
-      }}
-    >
+    <View style={{ marginBottom: spacing.md }}>
       <GlassmorphicView
         intensity="medium"
         style={{
@@ -120,12 +89,21 @@ const ProjectCard = ({
           {/* Header Section */}
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
             <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-              {/* Status Pill */}
-              <StatusPill
-                status={statusConfig.type}
-                label={statusConfig.label}
-                style={{ marginRight: spacing.sm }}
-              />
+              {/* Status Pill - Clickable */}
+              <TouchableOpacity
+                onPress={() => onStatusChange(project.id)}
+                activeOpacity={0.7}
+                {...getAccessibilityProps(
+                  'Zmień status projektu',
+                  `Aktualny status: ${statusConfig.label}. Kliknij, aby zmienić`
+                )}
+              >
+                <StatusPill
+                  status={statusConfig.type}
+                  label={statusConfig.label}
+                  style={{ marginRight: spacing.sm }}
+                />
+              </TouchableOpacity>
               
               {/* Project Title */}
               <Text
@@ -145,7 +123,7 @@ const ProjectCard = ({
             {/* Pin Button with Glow Effect */}
             <View style={{ position: 'relative' }}>
               {project.isPinned && (
-                <Animated.View
+                <View
                   style={{
                     position: 'absolute',
                     top: -2,
@@ -154,12 +132,11 @@ const ProjectCard = ({
                     bottom: -2,
                     borderRadius: borderRadius.full,
                     backgroundColor: colors.primary.glow,
-                    opacity: pinGlowOpacity,
                     shadowColor: colors.primary.glow,
                     shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.3, // Reduced shadow opacity
-                    shadowRadius: 4, // Smaller shadow radius
-                    elevation: 2, // Lower elevation
+                    shadowOpacity: pinGlowOpacity,
+                    shadowRadius: 4,
+                    elevation: 2,
                   }}
                 />
               )}
@@ -226,7 +203,7 @@ const ProjectCard = ({
                   fontWeight: 600,
                   fontFamily: typography.fonts.primary,
                 }}>
-                  {formatDate(project.startDate)}
+                  {formattedStartDate}
                 </Text>
               </View>
 
@@ -255,7 +232,7 @@ const ProjectCard = ({
                   fontWeight: 600,
                   fontFamily: typography.fonts.primary,
                 }}>
-                  {formatDate(project.endDate)}
+                  {formattedEndDate}
                 </Text>
               </View>
             </View>
@@ -332,8 +309,19 @@ const ProjectCard = ({
           </View>
         </LinearGradient>
       </GlassmorphicView>
-    </Animated.View>
+    </View>
   );
-};
+}, (prevProps, nextProps) => {
+  // OPTIMIZATION: Custom comparison function for React.memo
+  // Only re-render if these specific props change
+  return (
+    prevProps.project.id === nextProps.project.id &&
+    prevProps.project.name === nextProps.project.name &&
+    prevProps.project.status === nextProps.project.status &&
+    prevProps.project.isPinned === nextProps.project.isPinned &&
+    prevProps.project.startDate === nextProps.project.startDate &&
+    prevProps.project.endDate === nextProps.project.endDate
+  );
+});
 
 export default ProjectCard;

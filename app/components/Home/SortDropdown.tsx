@@ -1,5 +1,10 @@
-import React, { useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, Animated } from "react-native";
+import React, { useEffect } from "react";
+import { View, Text, TouchableOpacity } from "react-native";
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming 
+} from 'react-native-reanimated';
 import { GlassmorphicView } from "../ui";
 import { colors, gradients, typography, spacing, borderRadius, shadows, animations } from "../../utils/theme";
 
@@ -12,48 +17,29 @@ export default function SortDropdown({
   visible,
   onSortSelect,
 }: SortDropdownProps) {
-  const dropdownAnim = useRef(new Animated.Value(0)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useSharedValue(-10);
+  const scale = useSharedValue(0.95);
+  const opacity = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.timing(dropdownAnim, {
-          toValue: 1,
-          duration: animations.duration.normal,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: animations.duration.fast,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      translateY.value = withTiming(0, { duration: 200 });
+      scale.value = withTiming(1, { duration: 200 });
+      opacity.value = withTiming(1, { duration: 150 });
     } else {
-      Animated.parallel([
-        Animated.timing(dropdownAnim, {
-          toValue: 0,
-          duration: animations.duration.fast,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 0,
-          duration: animations.duration.fast,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      translateY.value = withTiming(-10, { duration: 150 });
+      scale.value = withTiming(0.95, { duration: 150 });
+      opacity.value = withTiming(0, { duration: 150 });
     }
   }, [visible]);
 
-  const dropdownTranslateY = dropdownAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-10, 0],
-  });
-
-  const dropdownScale = dropdownAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.95, 1],
-  });
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
 
   if (!visible) return null;
 
@@ -65,16 +51,14 @@ export default function SortDropdown({
 
   return (
     <Animated.View
-      style={{
-        opacity: opacityAnim,
-        transform: [
-          { translateY: dropdownTranslateY },
-          { scale: dropdownScale },
-        ],
-        marginHorizontal: spacing.md,
-        marginTop: spacing.xs,
-        zIndex: 1000,
-      }}
+      style={[
+        {
+          marginHorizontal: spacing.md,
+          marginTop: spacing.xs,
+          zIndex: 1000,
+        },
+        animatedStyle
+      ]}
     >
       <GlassmorphicView
         intensity="heavy"

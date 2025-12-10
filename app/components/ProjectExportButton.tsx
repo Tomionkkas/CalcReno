@@ -9,6 +9,7 @@ import { GlassmorphicView } from './ui';
 import { colors, gradients, typography, spacing, borderRadius, shadows } from '../utils/theme';
 import type { Project } from '../utils/storage';
 import { generateUUID, isValidUUID } from '../utils/storage';
+import { logger } from '../utils/logger';
 
 interface ProjectExportButtonProps {
   project: Project;
@@ -36,12 +37,13 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
 
     try {
       const { data, error } = await supabase
-        .from('project_exports')
-        .select('timeline_project_id')
-        .eq('project_id', project.id)
+        .from('calcreno_projects')
+        .select('is_exported_to_timeline, timeline_project_id')
+        .eq('id', project.id)
+        .eq('user_id', user.id)
         .single();
 
-      if (!error && data) {
+      if (!error && data?.is_exported_to_timeline && data?.timeline_project_id) {
         setIsLinked(true);
         setRenoTimelineProjectId(data.timeline_project_id);
       } else {
@@ -49,7 +51,7 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
         setRenoTimelineProjectId(null);
       }
     } catch (error) {
-      console.error('Error checking project link:', error);
+      logger.error('Error checking project link:', error);
     } finally {
       setChecking(false);
     }
@@ -90,7 +92,7 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
           });
 
         if (projectError) {
-          console.error('Failed to save CalcReno project:', projectError);
+          logger.error('Failed to save CalcReno project:', projectError);
           throw new Error('Nie udało się zapisać projektu CalcReno do bazy danych');
         }
       }
@@ -111,16 +113,16 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
       };
 
       // Get user session for proper JWT authentication
-      console.log('Getting user session for JWT...');
+      logger.log('Getting user session for JWT...');
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError || !session?.access_token) {
-        console.error('Authentication error:', sessionError);
+        logger.error('Authentication error:', sessionError);
         throw new Error('User not authenticated');
       }
 
-      console.log('✅ Got valid session, calling Edge Function via manual fetch...');
-      console.log('Export data being sent:', exportData);
+      logger.log('✅ Got valid session, calling Edge Function via manual fetch...');
+      logger.log('Export data being sent:', exportData);
 
       const projectRef = 'kralcmyhjvoiywcpntkg';
       const functionUrl = `https://${projectRef}.supabase.co/functions/v1/import-calcreno-project`;
@@ -136,17 +138,17 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
         body: JSON.stringify(exportData),
       });
 
-      console.log('Manual fetch response status:', response.status);
+      logger.log('Manual fetch response status:', response.status);
 
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error('Edge Function failed (manual fetch):', errorBody);
+        logger.error('Edge Function failed (manual fetch):', errorBody);
         throw new Error(`Import failed: Edge function returned status ${response.status}. Body: ${errorBody}`);
       }
 
       const result = await response.json();
       
-      console.log('🎯 Edge Function result:', result);
+      logger.log('🎯 Edge Function result:', result);
 
       if (!result || !result.success) {
         throw new Error(result?.error || 'Failed to import project to RenoTimeline');
@@ -167,7 +169,7 @@ export default function ProjectExportButton({ project, onExportComplete }: Proje
       onExportComplete?.();
 
     } catch (error) {
-      console.error('Export error:', error);
+      logger.error('Export error:', error);
       Alert.alert('Błąd', 'Nie udało się eksportować projektu do RenoTimeline. Spróbuj ponownie później.');
     } finally {
       setExporting(false);

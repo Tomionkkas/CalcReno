@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { View, ScrollView, Alert, Platform } from "react-native";
+import { View, ScrollView, Platform } from "react-native";
 import { Project, Room } from "../../utils/storage";
 import { useRoomAnimations, getAnimationInterpolations, createStaggeredRoomAnimations } from "./utils/roomAnimations";
 import { 
   getRoomDisplayData, 
-  getProjectProgress, 
-  getProjectStatus,
+  getProjectProgress,
   sortRoomsByStatus 
 } from "./utils/roomCalculations";
 import RoomsHeader from "./components/RoomsHeader";
@@ -30,18 +29,22 @@ export default function ProjectRoomsTab({
   onRoomPress,
   onCalculateRoom
 }: ProjectRoomsTabProps) {
-  const [roomDisplayData, setRoomDisplayData] = useState<ReturnType<typeof getRoomDisplayData>[]>([]);
+  // Initialize roomDisplayData immediately to prevent empty state flash
+  const [roomDisplayData, setRoomDisplayData] = useState<ReturnType<typeof getRoomDisplayData>[]>(() => {
+    const sortedRooms = sortRoomsByStatus(project.rooms);
+    return sortedRooms.map(room => getRoomDisplayData(room));
+  });
   
-  // Android-specific force re-render state
-  const [androidForceUpdate, setAndroidForceUpdate] = useState(0);
+  // Force re-render state (needed for both Android and iOS to ensure list updates)
+  const [forceUpdate, setForceUpdate] = useState(0);
   
-  // Android-specific: Disable animations that might cause rendering issues
+  // Animations (disabled for Android due to rendering issues)
   const animations = useRoomAnimations();
   const interpolations = getAnimationInterpolations(animations);
   
   const { startStaggeredAnimations, getRoomAnimationInterpolations } = createStaggeredRoomAnimations(project.rooms.length);
 
-  // Initialize room display data with Android-specific handling
+  // Initialize room display data with cross-platform handling
   useEffect(() => {
     console.log("ProjectRoomsTab: Updating room display data", {
       platform: Platform.OS,
@@ -54,68 +57,54 @@ export default function ProjectRoomsTab({
     
     setRoomDisplayData(displayData);
     
-    // Android-specific: Force re-render after state update
-    if (Platform.OS === 'android') {
-      setTimeout(() => {
-        setAndroidForceUpdate(prev => prev + 1);
-        console.log("ProjectRoomsTab: Android force update triggered");
-      }, 50);
-    }
+    // Force re-render after state update (both Android and iOS)
+    setTimeout(() => {
+      setForceUpdate(prev => prev + 1);
+      console.log(`ProjectRoomsTab: ${Platform.OS} force update triggered`);
+    }, Platform.OS === 'ios' ? 100 : 50); // iOS needs more time
   }, [project.rooms]);
 
-  // Start staggered animations when rooms change (disabled for Android)
-  useEffect(() => {
-    if (roomDisplayData.length > 0 && Platform.OS !== 'android') {
-      startStaggeredAnimations();
-    }
-  }, [roomDisplayData.length, androidForceUpdate]);
+  // Animations disabled - rooms appear immediately without fade-in
+  // useEffect(() => {
+  //   if (roomDisplayData.length > 0 && Platform.OS !== 'android') {
+  //     startStaggeredAnimations();
+  //   }
+  // }, [roomDisplayData.length, forceUpdate]);
 
   const projectProgress = getProjectProgress(project.rooms);
-  const projectStatus = getProjectStatus(project.rooms);
+  // Use actual project status instead of calculating from rooms
+  const projectStatus = project.status;
 
   const handleDeleteRoom = (roomId: string) => {
-    const room = project.rooms.find(r => r.id === roomId);
-    if (!room) return;
-
-    Alert.alert(
-      "Usuń pomieszczenie",
-      `Czy na pewno chcesz usunąć pomieszczenie "${room.name}"?`,
-      [
-        { text: "Anuluj", style: "cancel" },
-        { text: "Usuń", style: "destructive", onPress: () => onDeleteRoom(roomId) },
-      ]
-    );
+    // No need for double confirmation - useProjectData.tsx already shows styled confirmation modal
+    onDeleteRoom(roomId);
   };
 
-  // Enhanced key generation for Android
+  // Enhanced key generation for better list updates
   const getRoomKey = (room: ReturnType<typeof getRoomDisplayData>, index: number) => {
-    if (Platform.OS === 'android') {
-      return `${room.id}-${androidForceUpdate}-${index}`;
-    }
-    return room.id;
+    // Include forceUpdate in key to trigger re-renders when needed
+    return `${room.id}-${forceUpdate}-${index}`;
   };
 
-  // Android-specific: Get animation interpolations (disabled for Android)
+  // Get animation interpolations (disabled for all platforms to ensure immediate visibility)
   const getRoomAnimations = (index: number) => {
-    if (Platform.OS === 'android') {
-      return undefined; // Disable animations on Android
-    }
-    return getRoomAnimationInterpolations(index);
+    // Disable animations on both platforms to prevent invisible rooms
+    return undefined;
   };
 
   return (
     <ScrollView 
       style={{ flex: 1 }} 
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ padding: 20 }}
-      // Android-specific: Force re-render on scroll
-      key={Platform.OS === 'android' ? `scrollview-${androidForceUpdate}` : undefined}
-      // Android-specific: Disable scroll optimization
-      removeClippedSubviews={Platform.OS === 'android' ? false : true}
+      contentContainerStyle={{ padding: 20, minHeight: 1 }}
+      // Force re-render on scroll for better update reliability
+      key={`scrollview-${forceUpdate}`}
+      // CRITICAL FIX: Disable removeClippedSubviews on all platforms to prevent iOS room culling
+      removeClippedSubviews={false}
     >
       {/* Header */}
       <RoomsHeader 
-        key={Platform.OS === 'android' ? `header-${androidForceUpdate}` : undefined}
+        key={`header-${forceUpdate}`}
         roomCount={project.rooms.length}
         projectProgress={projectProgress}
         projectStatus={projectStatus}
@@ -128,7 +117,7 @@ export default function ProjectRoomsTab({
       {/* Rooms List */}
       {roomDisplayData.length > 0 ? (
         <View 
-          key={Platform.OS === 'android' ? `rooms-container-${androidForceUpdate}` : undefined}
+          key={`rooms-container-${forceUpdate}`}
           style={Platform.OS === 'android' ? { minHeight: 1 } : undefined} // Force layout on Android
         >
           {roomDisplayData.map((room, index) => (
@@ -154,7 +143,7 @@ export default function ProjectRoomsTab({
         </View>
       ) : (
         <EmptyState 
-          key={Platform.OS === 'android' ? `empty-state-${androidForceUpdate}` : undefined}
+          key={`empty-state-${forceUpdate}`}
           animations={Platform.OS === 'android' ? undefined : {
             roomsTranslateY: interpolations.roomsTranslateY,
             roomsOpacity: interpolations.roomsOpacity,
@@ -164,7 +153,7 @@ export default function ProjectRoomsTab({
 
       {/* Add Room Button */}
       <AddRoomButton 
-        key={Platform.OS === 'android' ? `add-button-${androidForceUpdate}` : undefined}
+        key={`add-button-${forceUpdate}`}
         onPress={onAddRoom}
         animations={Platform.OS === 'android' ? undefined : {
           addButtonScale: interpolations.addButtonScale,

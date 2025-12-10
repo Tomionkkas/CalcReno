@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useToast } from "../../../hooks/useToast";
 import { getWallsForShape } from "../../../utils/shapeCalculations";
+import { normalizeDecimalSeparator } from "../../../utils/numberInput";
 import { RoomEditorProps, RoomShape, Dimensions, DisplayValues } from "../types";
 
 interface UseRoomEditorProps {
@@ -78,11 +79,14 @@ export const useRoomEditor = ({ onSave, initialData }: UseRoomEditorProps) => {
   }, [roomShape, dimensions, lShapeCorner]);
 
   const handleDimensionChange = (key: string, value: string) => {
+    // Normalize decimal separator (comma to period)
+    const normalizedValue = normalizeDecimalSeparator(value);
+    
     // Update display value immediately to preserve user input
-    setDisplayValues((prev: DisplayValues) => ({ ...prev, [key]: value }));
+    setDisplayValues((prev: DisplayValues) => ({ ...prev, [key]: normalizedValue }));
     
     // Only update dimensions if we have a valid number
-    const numValue = parseFloat(value);
+    const numValue = parseFloat(normalizedValue);
     if (!isNaN(numValue) && numValue >= 0) {
       // Convert meters to cm for internal storage
       setDimensions((prev: Dimensions) => ({ ...prev, [key]: numValue * 100 }));

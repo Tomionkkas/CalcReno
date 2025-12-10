@@ -66,7 +66,7 @@ export const exportToCSV = async (
     const fileUri = FileSystem.documentDirectory + fileName;
     
     await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-      encoding: FileSystem.EncodingType.UTF8,
+      encoding: 'utf8',
     });
     
     // Share the CSV
@@ -110,68 +110,197 @@ const generatePDFContent = (project: Project, totalCost: number, roomsWithMateri
       <meta charset="UTF-8">
       <title>Kosztorys - ${project.name}</title>
       <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .header { text-align: center; margin-bottom: 30px; }
-        .summary { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .room { margin-bottom: 20px; border: 1px solid #ddd; border-radius: 8px; padding: 15px; }
-        .room-header { font-weight: bold; margin-bottom: 10px; font-size: 16px; }
-        .materials-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .materials-table th, .materials-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        .materials-table th { background-color: #f2f2f2; }
-        .total-cost { font-size: 18px; font-weight: bold; color: #2563eb; }
+        :root {
+          --primary: #4F46E5;
+          --text: #1F2937;
+          --text-light: #6B7280;
+          --bg-gray: #F9FAFB;
+          --border: #E5E7EB;
+        }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          color: var(--text);
+          line-height: 1.5;
+          margin: 0;
+          padding: 40px;
+        }
+        .header {
+          border-bottom: 2px solid var(--primary);
+          padding-bottom: 20px;
+          margin-bottom: 40px;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+        }
+        .brand {
+          font-size: 24px;
+          font-weight: 800;
+          color: var(--primary);
+          text-transform: uppercase;
+          letter-spacing: -0.5px;
+        }
+        .meta {
+          text-align: right;
+          font-size: 14px;
+          color: var(--text-light);
+        }
+        .summary-card {
+          background: var(--bg-gray);
+          padding: 24px;
+          border-radius: 12px;
+          margin-bottom: 40px;
+          border: 1px solid var(--border);
+        }
+        .total-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+        }
+        .total-label {
+          font-size: 16px;
+          font-weight: 600;
+          color: var(--text-light);
+        }
+        .total-value {
+          font-size: 32px;
+          font-weight: 800;
+          color: var(--primary);
+        }
+        h2 {
+          font-size: 20px;
+          font-weight: 700;
+          margin-top: 40px;
+          margin-bottom: 20px;
+          color: var(--text);
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 14px;
+        }
+        th {
+          text-align: left;
+          padding: 12px 16px;
+          background: var(--bg-gray);
+          color: var(--text-light);
+          font-weight: 600;
+          text-transform: uppercase;
+          font-size: 12px;
+          letter-spacing: 0.5px;
+        }
+        td {
+          padding: 12px 16px;
+          border-bottom: 1px solid var(--border);
+        }
+        tr:last-child td {
+          border-bottom: none;
+        }
+        .room-section {
+          margin-top: 40px;
+          page-break-inside: avoid;
+        }
+        .room-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          padding-bottom: 8px;
+          border-bottom: 1px solid var(--border);
+          margin-bottom: 16px;
+        }
+        .room-title {
+          font-size: 18px;
+          font-weight: 700;
+        }
+        .room-meta {
+          font-size: 14px;
+          color: var(--text-light);
+        }
+        .footer {
+          margin-top: 60px;
+          text-align: center;
+          font-size: 12px;
+          color: var(--text-light);
+          border-top: 1px solid var(--border);
+          padding-top: 20px;
+        }
       </style>
     </head>
     <body>
       <div class="header">
-        <h1>Kosztorys Renovacji</h1>
-        <h2>${project.name}</h2>
-        <p>Data wygenerowania: ${new Date().toLocaleDateString('pl-PL')}</p>
-      </div>
-      
-      <div class="summary">
-        <div class="total-cost">Całkowity koszt projektu: ${totalCost.toFixed(2)} zł</div>
-        <p>Liczba pomieszczeń z wycenami: ${roomsWithMaterials.length} z ${project?.rooms.length || 0}</p>
+        <div>
+          <div class="brand">CalcReno</div>
+          <div style="font-size: 20px; font-weight: 600; margin-top: 8px;">${project.name}</div>
+        </div>
+        <div class="meta">
+          Data wygenerowania<br>
+          <strong>${new Date().toLocaleDateString('pl-PL')}</strong>
+        </div>
       </div>
 
-      <h3>Łączne zapotrzebowanie na materiały</h3>
-      <table class="materials-table">
+      <div class="summary-card">
+        <div class="total-row">
+          <span class="total-label">Całkowity koszt projektu</span>
+          <span class="total-value">${totalCost.toFixed(2)} zł</span>
+        </div>
+        <div style="font-size: 14px; color: var(--text-light);">
+          Obejmuje ${roomsWithMaterials.length} ${roomsWithMaterials.length === 1 ? 'pomieszczenie' : 'pomieszczeń'}
+        </div>
+      </div>
+
+      <h2>Zestawienie Materiałów (Całość)</h2>
+      <table>
         <thead>
-          <tr><th>Materiał</th><th>Ilość</th><th>Jednostka</th></tr>
+          <tr>
+            <th>Materiał</th>
+            <th style="text-align: right;">Ilość</th>
+            <th style="width: 100px;">Jedn.</th>
+          </tr>
         </thead>
         <tbody>
           ${Object.entries(allMaterials).map(([material, quantity]) => `
             <tr>
-              <td>${roomMaterialNames[material] || material}</td>
-              <td>${quantity}</td>
-              <td>${roomMaterialUnits[material] || 'szt'}</td>
+              <td style="font-weight: 500;">${roomMaterialNames[material] || material}</td>
+              <td style="text-align: right;">${quantity}</td>
+              <td style="color: var(--text-light);">${roomMaterialUnits[material] || 'szt'}</td>
             </tr>
           `).join('')}
         </tbody>
       </table>
 
-      <h3>Szczegóły według pomieszczeń</h3>
       ${roomsWithMaterials.map(room => `
-        <div class="room">
+        <div class="room-section">
           <div class="room-header">
-            ${room.name} - ${room.materials?.totalCost.toFixed(2)} zł
-            <br><small>${(room.dimensions.width / 100).toFixed(2)}m × ${(room.dimensions.length / 100).toFixed(2)}m</small>
+            <div class="room-title">${room.name}</div>
+            <div class="room-meta">
+              ${(room.dimensions.width / 100).toFixed(2)}m × ${(room.dimensions.length / 100).toFixed(2)}m
+              <span style="margin-left: 12px; font-weight: 600; color: var(--text);">${room.materials?.totalCost.toFixed(2)} zł</span>
+            </div>
           </div>
-          <table class="materials-table">
+          <table>
             <thead>
-              <tr><th>Materiał</th><th>Ilość</th><th>Jednostka</th></tr>
+              <tr>
+                <th>Materiał</th>
+                <th style="text-align: right;">Ilość</th>
+                <th style="width: 100px;">Jedn.</th>
+              </tr>
             </thead>
             <tbody>
               ${Object.entries(room.materials?.materials || {}).map(([material, quantity]) => `
                 <tr>
                   <td>${roomMaterialNames[material] || material}</td>
-                  <td>${quantity}</td>
-                  <td>${roomMaterialUnits[material] || 'szt'}</td>
+                  <td style="text-align: right;">${quantity}</td>
+                  <td style="color: var(--text-light);">${roomMaterialUnits[material] || 'szt'}</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
         </div>
       `).join('')}
+
+      <div class="footer">
+        Wygenerowano w aplikacji CalcReno
+      </div>
     </body>
     </html>
   `;

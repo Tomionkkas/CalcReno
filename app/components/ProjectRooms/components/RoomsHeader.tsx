@@ -3,11 +3,12 @@ import { View, Text, Animated } from "react-native";
 import { Home } from "lucide-react-native";
 import { colors, typography, spacing } from "../../../utils/theme";
 import { StatusPill } from "../../ui";
+import type { Project } from "../../../utils/storage";
 
 interface RoomsHeaderProps {
   roomCount: number;
   projectProgress: number;
-  projectStatus: 'completed' | 'in-progress' | 'planned';
+  projectStatus: Project["status"];
   animations?: {
     headerTranslateY: Animated.AnimatedInterpolation<string | number>;
     headerOpacity: Animated.AnimatedInterpolation<string | number>;
@@ -20,16 +21,17 @@ export default function RoomsHeader({
   projectStatus, 
   animations 
 }: RoomsHeaderProps) {
-  const getStatusConfig = (status: string) => {
+  const getStatusConfig = (status: Project["status"]) => {
     switch (status) {
-      case 'completed':
-        return { type: 'completed' as const, label: 'Ukończone', color: '#10B981' };
-      case 'in-progress':
-        return { type: 'inProgress' as const, label: 'W trakcie', color: '#3B82F6' };
-      case 'planned':
-        return { type: 'planned' as const, label: 'Planowane', color: '#F59E0B' };
+      case "Zakończony":
+        return { type: "completed" as const, label: "Zakończony" };
+      case "W trakcie":
+        return { type: "inProgress" as const, label: "W trakcie" };
+      case "Wstrzymany":
+        return { type: "paused" as const, label: "Wstrzymany" };
+      case "Planowany":
       default:
-        return { type: 'planned' as const, label: 'Planowane', color: '#F59E0B' };
+        return { type: "planned" as const, label: "Planowany" };
     }
   };
 

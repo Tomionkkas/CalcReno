@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { StorageService, Project, generateUUID } from "../utils/storage";
+import { logger } from "../utils/logger";
 
 interface UseProjectsProps {
   user: any;
@@ -16,25 +17,25 @@ export function useProjects({ user, isGuest, needsOnboarding, setNeedsOnboarding
   const loadProjects = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('[useProjects] Loading projects for user:', user?.id, 'isGuest:', isGuest);
+      logger.log('[useProjects] Loading projects for user:', user?.id, 'isGuest:', isGuest);
       
       let projectsData: Project[] = [];
       
       // For logged-in users, always try to sync from database first
       if (user && !isGuest) {
-        console.log('[useProjects] User is logged in - syncing from database...');
+        logger.log('[useProjects] User is logged in - syncing from database...');
         try {
           projectsData = await StorageService.forceSyncFromDatabase(user.id);
-          console.log('[useProjects] Synced from database:', projectsData.length, 'projects');
+          logger.log('[useProjects] Synced from database:', projectsData.length, 'projects');
         } catch (syncError) {
-          console.error('[useProjects] Database sync failed, falling back to local:', syncError);
+          logger.error('[useProjects] Database sync failed, falling back to local:', syncError);
           // Fallback to local storage if sync fails
           projectsData = await StorageService.getProjects(isGuest, user.id);
         }
       } else {
         // Guest mode - load from local storage
         projectsData = await StorageService.getProjects(isGuest, user?.id);
-        console.log('[useProjects] Guest mode - loaded from local:', projectsData.length, 'projects');
+        logger.log('[useProjects] Guest mode - loaded from local:', projectsData.length, 'projects');
       }
       
       setProjects(projectsData);
@@ -46,9 +47,8 @@ export function useProjects({ user, isGuest, needsOnboarding, setNeedsOnboarding
         setNeedsOnboarding(false);
       }
     } catch (error) {
-      console.error("[useProjects] Error loading projects:", error);
+      logger.error("[useProjects] Error loading projects:", error);
       // DON'T clear projects on error - keep whatever we have
-      // setProjects([]);
     } finally {
       setLoading(false);
     }
@@ -60,7 +60,7 @@ export function useProjects({ user, isGuest, needsOnboarding, setNeedsOnboarding
     // If user is logged in, force sync from database
     if (user && !isGuest) {
       try {
-        console.log('Force syncing projects from database...');
+        logger.log('Force syncing projects from database...');
         const syncedProjects = await StorageService.forceSyncFromDatabase(user.id);
         setProjects(syncedProjects);
         
@@ -71,7 +71,7 @@ export function useProjects({ user, isGuest, needsOnboarding, setNeedsOnboarding
           setNeedsOnboarding(false);
         }
       } catch (error) {
-        console.error('Error force syncing projects:', error);
+        logger.error('Error force syncing projects:', error);
         await loadProjects(); // Fallback to regular load
       }
     } else {
@@ -110,7 +110,7 @@ export function useProjects({ user, isGuest, needsOnboarding, setNeedsOnboarding
       
       return { success: true, project: newProject };
     } catch (error) {
-      console.error("Error adding project:", error);
+      logger.error("Error adding project:", error);
       return { success: false, error };
     }
   }, [isGuest, user?.id, needsOnboarding, setNeedsOnboarding]);
@@ -121,7 +121,7 @@ export function useProjects({ user, isGuest, needsOnboarding, setNeedsOnboarding
       setProjects(prev => prev.filter(project => project.id !== projectId));
       return { success: true };
     } catch (error) {
-      console.error("Error deleting project:", error);
+      logger.error("Error deleting project:", error);
       return { success: false, error };
     }
   }, [isGuest, user?.id]);
@@ -139,7 +139,25 @@ export function useProjects({ user, isGuest, needsOnboarding, setNeedsOnboarding
       }
       return { success: false, error: "Project not found" };
     } catch (error) {
-      console.error("Error updating project:", error);
+      logger.error("Error updating project:", error);
+      return { success: false, error };
+    }
+  }, [projects, isGuest, user?.id]);
+
+  const updateProjectStatus = useCallback(async (projectId: string, newStatus: Project["status"]) => {
+    try {
+      const project = projects.find((p) => p.id === projectId);
+      if (project) {
+        const updatedProject = { ...project, status: newStatus };
+        await StorageService.updateProject(updatedProject, isGuest, user?.id);
+        setProjects(prev => 
+          prev.map((p) => (p.id === projectId ? updatedProject : p))
+        );
+        return { success: true };
+      }
+      return { success: false, error: "Project not found" };
+    } catch (error) {
+      logger.error("Error updating project status:", error);
       return { success: false, error };
     }
   }, [projects, isGuest, user?.id]);
@@ -174,6 +192,7 @@ export function useProjects({ user, isGuest, needsOnboarding, setNeedsOnboarding
     addProject,
     deleteProject,
     togglePinProject,
+    updateProjectStatus,
     sortProjects,
   };
 }
