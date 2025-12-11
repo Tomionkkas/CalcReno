@@ -1,0 +1,13 @@
+diff --git a/node_modules/react-native-worklets/RNWorklets.podspec b/node_modules/react-native-worklets/RNWorklets.podspec
+index 2133f86..33019b3 100644
+--- a/node_modules/react-native-worklets/RNWorklets.podspec
++++ b/node_modules/react-native-worklets/RNWorklets.podspec
+@@ -5,7 +5,7 @@ package = JSON.parse(File.read(File.join(__dir__, "package.json")))
+ $worklets_config = worklets_find_config()
+ worklets_assert_minimal_react_native_version($worklets_config)
+ 
+-$new_arch_enabled = ENV['RCT_NEW_ARCH_ENABLED'] != '0'
++$new_arch_enabled = ENV['RCT_NEW_ARCH_ENABLED'] == '1'
+ worklets_assert_new_architecture_enabled($new_arch_enabled)
+ 
+ ios_min_version = '13.4'
