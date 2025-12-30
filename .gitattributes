@@ -1,0 +1,5 @@
+# Ensure iOS shell scripts use LF line endings
+ios/.xcode.env text eol=lf
+ios/.xcode.env.local text eol=lf
+*.sh text eol=lf
+Podfile text eol=lf
