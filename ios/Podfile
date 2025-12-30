@@ -56,5 +56,19 @@ target 'CalcReno' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    # Set deployment target for all pod targets to match
+    deployment_target = podfile_properties['ios.deploymentTarget'] || '15.1'
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |build_config|
+        build_config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = deployment_target
+      end
+    end
   end
+end
+
+# Widget Extension target - pure SwiftUI, no React Native dependencies needed
+target 'RenoTimelineWidgetExtension' do
+  # Widget uses only native frameworks (WidgetKit, SwiftUI)
+  # No pods required
 end
