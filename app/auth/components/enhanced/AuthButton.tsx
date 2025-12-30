@@ -140,9 +140,9 @@ export function AuthButton({
   // Get button styles based on variant and size
   const getButtonStyles = () => {
     const baseStyles = {
-      borderRadius: size === 'large' ? 34 : size === 'medium' ? 28 : 22,
-      paddingVertical: size === 'large' ? 20 : size === 'medium' ? 16 : 12,
-      paddingHorizontal: size === 'large' ? 48 : size === 'medium' ? 36 : 24,
+      borderRadius: 25, // Match input field border radius for consistency
+      paddingVertical: size === 'large' ? 18 : size === 'medium' ? 16 : 12,
+      paddingHorizontal: size === 'large' ? 40 : size === 'medium' ? 32 : 24,
       minHeight: size === 'large' ? 56 : size === 'medium' ? 48 : 40,
     };
 
@@ -220,16 +220,16 @@ export function AuthButton({
           {variant === 'primary' && (
             <View style={styles.glowBackground}>
               <LinearGradient
-                colors={['rgba(108, 99, 255, 0.2)', 'rgba(108, 99, 255, 0.1)', 'rgba(108, 99, 255, 0.05)']}
+                colors={['rgba(93, 213, 213, 0.15)', 'rgba(168, 85, 247, 0.1)', 'rgba(236, 72, 153, 0.05)']}
                 style={StyleSheet.absoluteFillObject}
               />
             </View>
           )}
 
-          {/* Primary Gradient Background */}
+          {/* Primary Gradient Background - RenoTimeline style (Blue → Purple → Magenta) */}
           {variant === 'primary' && (
             <LinearGradient
-              colors={['rgba(108, 99, 255, 0.8)', 'rgba(139, 92, 246, 0.8)', 'rgba(168, 85, 247, 0.8)']}
+              colors={['#3B82F6', '#A855F7', '#EC4899']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFillObject}
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#6C63FF',
+    shadowColor: '#5DD5D5',
     shadowOffset: {
       width: 0,
       height: 4,
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'rgba(30, 33, 57, 0.2)',
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.4)',
+    borderColor: 'rgba(93, 213, 213, 0.4)',
     backdropFilter: 'blur(10px)',
     width: '100%',
   },

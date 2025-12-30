@@ -1,0 +1,698 @@
+[
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.feedback_upvotes\\` has a row level security policy \\`Authenticated users can add upvotes\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "feedback_upvotes",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_feedback_upvotes_Authenticated users can add upvotes"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.feedback_upvotes\\` has a row level security policy \\`Users can remove own upvotes\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "feedback_upvotes",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_feedback_upvotes_Users can remove own upvotes"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.feedback_comments\\` has a row level security policy \\`Authenticated users can create comments\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "feedback_comments",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_feedback_comments_Authenticated users can create comments"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.feedback_comments\\` has a row level security policy \\`Users can update own comments\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "feedback_comments",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_feedback_comments_Users can update own comments"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`shared_schema.project_roles\\` has a row level security policy \\`Users can view their own project roles\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "project_roles",
+        "type": "table",
+        "schema": "shared_schema"
+      },
+      "cache_key": "auth_rls_init_plan_shared_schema_project_roles_Users can view their own project roles"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`shared_schema.project_roles\\` has a row level security policy \\`Users can remove their own project assignments\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "project_roles",
+        "type": "table",
+        "schema": "shared_schema"
+      },
+      "cache_key": "auth_rls_init_plan_shared_schema_project_roles_Users can remove their own project assignments"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`shared_schema.profiles\\` has a row level security policy \\`Users can update own profile\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "profiles",
+        "type": "table",
+        "schema": "shared_schema"
+      },
+      "cache_key": "auth_rls_init_plan_shared_schema_profiles_Users can update own profile"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`shared_schema.profiles\\` has a row level security policy \\`Users can insert own profile\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "profiles",
+        "type": "table",
+        "schema": "shared_schema"
+      },
+      "cache_key": "auth_rls_init_plan_shared_schema_profiles_Users can insert own profile"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.calcreno_rooms\\` has a row level security policy \\`Users can view their own rooms\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "calcreno_rooms",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_calcreno_rooms_Users can view their own rooms"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.calcreno_rooms\\` has a row level security policy \\`Users can insert their own rooms\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "calcreno_rooms",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_calcreno_rooms_Users can insert their own rooms"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.calcreno_rooms\\` has a row level security policy \\`Users can update their own rooms\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "calcreno_rooms",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_calcreno_rooms_Users can update their own rooms"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.calcreno_rooms\\` has a row level security policy \\`Users can delete their own rooms\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "calcreno_rooms",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_calcreno_rooms_Users can delete their own rooms"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.calcreno_room_elements\\` has a row level security policy \\`Users can view their own room elements\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "calcreno_room_elements",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_calcreno_room_elements_Users can view their own room elements"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.calcreno_room_elements\\` has a row level security policy \\`Users can insert their own room elements\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "calcreno_room_elements",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_calcreno_room_elements_Users can insert their own room elements"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.calcreno_room_elements\\` has a row level security policy \\`Users can update their own room elements\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "calcreno_room_elements",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_calcreno_room_elements_Users can update their own room elements"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`calcreno_schema.calcreno_room_elements\\` has a row level security policy \\`Users can delete their own room elements\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "calcreno_room_elements",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "auth_rls_init_plan_calcreno_schema_calcreno_room_elements_Users can delete their own room elements"
+    },
+    {
+      "name": "auth_rls_initplan",
+      "title": "Auth RLS Initialization Plan",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if calls to \\`current_setting()\\` and \\`auth.<function>()\\` in RLS policies are being unnecessarily re-evaluated for each row",
+      "detail": "Table \\`renotimeline_schema.tasks\\` has a row level security policy \\`Allow task access for project owners and members\\` that re-evaluates current_setting() or auth.<function>() for each row. This produces suboptimal query performance at scale. Resolve the issue by replacing \\`auth.<function>()\\` with \\`(select auth.<function>())\\`. See [docs](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select) for more info.",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0003_auth_rls_initplan",
+      "metadata": {
+        "name": "tasks",
+        "type": "table",
+        "schema": "renotimeline_schema"
+      },
+      "cache_key": "auth_rls_init_plan_renotimeline_schema_tasks_Allow task access for project owners and members"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_projects\\` has multiple permissive policies for role \\`authenticated\\` for action \\`DELETE\\`. Policies include \\`{\"Users can DELETE their own projects\",\"Users can delete own projects\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_projects",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_projects_authenticated_DELETE"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_projects\\` has multiple permissive policies for role \\`authenticated\\` for action \\`INSERT\\`. Policies include \\`{\"Users can INSERT their own projects\",\"Users can insert own projects\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_projects",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_projects_authenticated_INSERT"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_projects\\` has multiple permissive policies for role \\`authenticated\\` for action \\`SELECT\\`. Policies include \\`{\"Users can SELECT their own projects\",\"Users can select own projects\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_projects",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_projects_authenticated_SELECT"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_projects\\` has multiple permissive policies for role \\`authenticated\\` for action \\`UPDATE\\`. Policies include \\`{\"Users can UPDATE their own projects\",\"Users can update own projects\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_projects",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_projects_authenticated_UPDATE"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_room_elements\\` has multiple permissive policies for role \\`authenticated\\` for action \\`DELETE\\`. Policies include \\`{\"Users can DELETE elements in their project rooms\",\"Users can delete own room elements\",\"Users can delete their own room elements\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_room_elements",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_room_elements_authenticated_DELETE"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_room_elements\\` has multiple permissive policies for role \\`authenticated\\` for action \\`INSERT\\`. Policies include \\`{\"Users can INSERT elements in their project rooms\",\"Users can insert their own room elements\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_room_elements",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_room_elements_authenticated_INSERT"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_room_elements\\` has multiple permissive policies for role \\`authenticated\\` for action \\`SELECT\\`. Policies include \\`{\"Users can SELECT elements of their project rooms\",\"Users can view their own room elements\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_room_elements",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_room_elements_authenticated_SELECT"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_room_elements\\` has multiple permissive policies for role \\`authenticated\\` for action \\`UPDATE\\`. Policies include \\`{\"Users can UPDATE elements in their project rooms\",\"Users can update their own room elements\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_room_elements",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_room_elements_authenticated_UPDATE"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_rooms\\` has multiple permissive policies for role \\`authenticated\\` for action \\`DELETE\\`. Policies include \\`{\"Users can DELETE rooms in their projects\",\"Users can delete their own rooms\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_rooms",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_rooms_authenticated_DELETE"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_rooms\\` has multiple permissive policies for role \\`authenticated\\` for action \\`INSERT\\`. Policies include \\`{\"Users can INSERT rooms in their projects\",\"Users can insert their own rooms\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_rooms",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_rooms_authenticated_INSERT"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_rooms\\` has multiple permissive policies for role \\`authenticated\\` for action \\`SELECT\\`. Policies include \\`{\"Users can SELECT rooms of their projects\",\"Users can view their own rooms\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_rooms",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_rooms_authenticated_SELECT"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.calcreno_rooms\\` has multiple permissive policies for role \\`authenticated\\` for action \\`UPDATE\\`. Policies include \\`{\"Users can UPDATE rooms in their projects\",\"Users can update their own rooms\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "calcreno_rooms",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_calcreno_rooms_authenticated_UPDATE"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.feedback_comments\\` has multiple permissive policies for role \\`authenticated\\` for action \\`INSERT\\`. Policies include \\`{\"Authenticated users can create comments\",\"OP or Dev create comments\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "feedback_comments",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_feedback_comments_authenticated_INSERT"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.feedback_upvotes\\` has multiple permissive policies for role \\`authenticated\\` for action \\`DELETE\\`. Policies include \\`{\"Users can delete own upvotes\",\"Users can remove own upvotes\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "feedback_upvotes",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_feedback_upvotes_authenticated_DELETE"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`calcreno_schema.feedback_upvotes\\` has multiple permissive policies for role \\`authenticated\\` for action \\`INSERT\\`. Policies include \\`{\"Authenticated create upvotes\",\"Authenticated users can add upvotes\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "feedback_upvotes",
+        "type": "table",
+        "schema": "calcreno_schema"
+      },
+      "cache_key": "multiple_permissive_policies_calcreno_schema_feedback_upvotes_authenticated_INSERT"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`shared_schema.profiles\\` has multiple permissive policies for role \\`anon\\` for action \\`SELECT\\`. Policies include \\`{\"Anyone can view profiles\",\"Users can view own profile\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "profiles",
+        "type": "table",
+        "schema": "shared_schema"
+      },
+      "cache_key": "multiple_permissive_policies_shared_schema_profiles_anon_SELECT"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`shared_schema.profiles\\` has multiple permissive policies for role \\`authenticated\\` for action \\`INSERT\\`. Policies include \\`{\"Users can insert own profile\",\"Users can insert their own profile\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "profiles",
+        "type": "table",
+        "schema": "shared_schema"
+      },
+      "cache_key": "multiple_permissive_policies_shared_schema_profiles_authenticated_INSERT"
+    },
+    {
+      "name": "multiple_permissive_policies",
+      "title": "Multiple Permissive Policies",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects if multiple permissive row level security policies are present on a table for the same \\`role\\` and \\`action\\` (e.g. insert). Multiple permissive policies are suboptimal for performance as each policy must be executed for every relevant query.",
+      "detail": "Table \\`shared_schema.profiles\\` has multiple permissive policies for role \\`authenticated\\` for action \\`SELECT\\`. Policies include \\`{\"Anyone can view profiles\",\"Users can view own profile\"}\\`",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0006_multiple_permissive_policies",
+      "metadata": {
+        "name": "profiles",
+        "type": "table",
+        "schema": "shared_schema"
+      },
+      "cache_key": "multiple_permissive_policies_shared_schema_profiles_authenticated_SELECT"
+    },
+    {
+      "name": "duplicate_index",
+      "title": "Duplicate Index",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects cases where two ore more identical indexes exist.",
+      "detail": "Table \\`calcreno_schema.calcreno_projects\\` has identical indexes {idx_calcreno_projects_user,idx_calcreno_projects_user_id}. Drop all except one of them",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0009_duplicate_index",
+      "metadata": {
+        "name": "calcreno_projects",
+        "type": "table",
+        "schema": "calcreno_schema",
+        "indexes": [
+          "idx_calcreno_projects_user",
+          "idx_calcreno_projects_user_id"
+        ]
+      },
+      "cache_key": "duplicate_index_calcreno_schema_calcreno_projects_{idx_calcreno_projects_user,idx_calcreno_projects_user_id}"
+    },
+    {
+      "name": "duplicate_index",
+      "title": "Duplicate Index",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects cases where two ore more identical indexes exist.",
+      "detail": "Table \\`calcreno_schema.calcreno_room_elements\\` has identical indexes {idx_calcreno_elements_room,idx_calcreno_room_elements_room_id}. Drop all except one of them",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0009_duplicate_index",
+      "metadata": {
+        "name": "calcreno_room_elements",
+        "type": "table",
+        "schema": "calcreno_schema",
+        "indexes": [
+          "idx_calcreno_elements_room",
+          "idx_calcreno_room_elements_room_id"
+        ]
+      },
+      "cache_key": "duplicate_index_calcreno_schema_calcreno_room_elements_{idx_calcreno_elements_room,idx_calcreno_room_elements_room_id}"
+    },
+    {
+      "name": "duplicate_index",
+      "title": "Duplicate Index",
+      "level": "WARN",
+      "facing": "EXTERNAL",
+      "categories": [
+        "PERFORMANCE"
+      ],
+      "description": "Detects cases where two ore more identical indexes exist.",
+      "detail": "Table \\`calcreno_schema.calcreno_rooms\\` has identical indexes {idx_calcreno_rooms_project,idx_calcreno_rooms_project_id}. Drop all except one of them",
+      "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0009_duplicate_index",
+      "metadata": {
+        "name": "calcreno_rooms",
+        "type": "table",
+        "schema": "calcreno_schema",
+        "indexes": [
+          "idx_calcreno_rooms_project",
+          "idx_calcreno_rooms_project_id"
+        ]
+      },
+      "cache_key": "duplicate_index_calcreno_schema_calcreno_rooms_{idx_calcreno_rooms_project,idx_calcreno_rooms_project_id}"
+    }
+  ]

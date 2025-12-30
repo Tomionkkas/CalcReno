@@ -90,6 +90,7 @@ export default function HomeScreen() {
     handleDeleteProject,
     handleLogout,
     handleSettings,
+    handleFeedback,
     closeAddModal,
     closeDeleteModal,
     closeSettings,
@@ -303,6 +304,7 @@ export default function HomeScreen() {
       <FloatingActionButton
         onPress={handleAddProject}
         onSettingsPress={handleSettings}
+        onFeedbackPress={handleFeedback}
         insets={insets}
       />
 

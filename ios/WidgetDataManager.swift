@@ -11,7 +11,7 @@ import WidgetKit
 class WidgetDataManager {
     static let shared = WidgetDataManager()
 
-    private let appGroupIdentifier = "group.com.tomionkka.testtempo.shared"
+    private let appGroupIdentifier = "group.com.tomionkka.calcreno.shared"
     private let authTokenKey = "widget_auth_token"
     private let tasksDataKey = "widget_tasks_data"
     private let lastUpdateKey = "widget_last_update"

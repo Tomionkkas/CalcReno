@@ -7,17 +7,18 @@ import Animated, {
   withSequence 
 } from 'react-native-reanimated';
 import { LinearGradient } from "expo-linear-gradient";
-import { Plus, FolderPlus, Settings } from "lucide-react-native";
+import { Plus, FolderPlus, Settings, MessageSquare } from "lucide-react-native";
 import { colors, gradients, typography, spacing, borderRadius, shadows, animations, components } from "../../utils/theme";
 import { useAccessibility } from "../../hooks/useAccessibility";
 
 interface FloatingActionButtonProps {
   onPress: () => void;
   onSettingsPress?: () => void;
+  onFeedbackPress?: () => void;
   insets: any;
 }
 
-export default function FloatingActionButton({ onPress, onSettingsPress, insets }: FloatingActionButtonProps) {
+export default function FloatingActionButton({ onPress, onSettingsPress, onFeedbackPress, insets }: FloatingActionButtonProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   
   // Reanimated v3 - works reliably in SDK 54
@@ -26,8 +27,10 @@ export default function FloatingActionButton({ onPress, onSettingsPress, insets 
   const glowOpacity = useSharedValue(0);
   const menuItem1Opacity = useSharedValue(0);
   const menuItem2Opacity = useSharedValue(0);
+  const menuItem3Opacity = useSharedValue(0);
   const menuItem1TranslateY = useSharedValue(60);
   const menuItem2TranslateY = useSharedValue(60);
+  const menuItem3TranslateY = useSharedValue(60);
   
   const { getAnimationDuration, shouldDisableAnimations, getAccessibilityProps } = useAccessibility();
 
@@ -64,9 +67,11 @@ export default function FloatingActionButton({ onPress, onSettingsPress, insets 
       fabRotate.value = withTiming(0, { duration });
       menuItem1Opacity.value = withTiming(0, { duration });
       menuItem2Opacity.value = withTiming(0, { duration });
+      menuItem3Opacity.value = withTiming(0, { duration });
       menuItem1TranslateY.value = withTiming(60, { duration });
       menuItem2TranslateY.value = withTiming(60, { duration });
-      
+      menuItem3TranslateY.value = withTiming(60, { duration });
+
       setTimeout(() => setIsExpanded(false), duration);
     } else {
       // Expand menu
@@ -75,8 +80,10 @@ export default function FloatingActionButton({ onPress, onSettingsPress, insets 
       fabRotate.value = withTiming(1, { duration });
       menuItem1Opacity.value = withTiming(1, { duration });
       menuItem2Opacity.value = withTiming(1, { duration });
+      menuItem3Opacity.value = withTiming(1, { duration });
       menuItem1TranslateY.value = withTiming(0, { duration });
       menuItem2TranslateY.value = withTiming(0, { duration });
+      menuItem3TranslateY.value = withTiming(0, { duration });
     }
   };
 
@@ -102,6 +109,11 @@ export default function FloatingActionButton({ onPress, onSettingsPress, insets 
     transform: [{ translateY: menuItem2TranslateY.value }],
   }));
 
+  const menuItem3AnimatedStyle = useAnimatedStyle(() => ({
+    opacity: menuItem3Opacity.value,
+    transform: [{ translateY: menuItem3TranslateY.value }],
+  }));
+
   const handleMenuItemPress = (action: string) => {
     const duration = shouldDisableAnimations() ? 0 : 200;
     
@@ -110,9 +122,11 @@ export default function FloatingActionButton({ onPress, onSettingsPress, insets 
     fabRotate.value = withTiming(0, { duration });
     menuItem1Opacity.value = withTiming(0, { duration });
     menuItem2Opacity.value = withTiming(0, { duration });
+    menuItem3Opacity.value = withTiming(0, { duration });
     menuItem1TranslateY.value = withTiming(60, { duration });
     menuItem2TranslateY.value = withTiming(60, { duration });
-    
+    menuItem3TranslateY.value = withTiming(60, { duration });
+
     setTimeout(() => {
       setIsExpanded(false);
       // Execute the action
@@ -120,6 +134,8 @@ export default function FloatingActionButton({ onPress, onSettingsPress, insets 
         onPress();
       } else if (action === 'settings' && onSettingsPress) {
         onSettingsPress();
+      } else if (action === 'feedback' && onFeedbackPress) {
+        onFeedbackPress();
       }
     }, duration);
   };
@@ -128,21 +144,47 @@ export default function FloatingActionButton({ onPress, onSettingsPress, insets 
   return (
          <View style={{ position: "absolute", bottom: insets.bottom + 24, right: 24, zIndex: 9999 }}>
        {/* Radial Menu Items - Always rendered for smooth animation */}
-                  {/* Menu Item 2 - Settings */}
-           <Animated.View
-             pointerEvents={isExpanded ? 'auto' : 'none'}
-             style={[
-               {
-                 position: "absolute",
-                 bottom: 88,
-                 right: 0,
-                 zIndex: 1002,
-               },
-               menuItem2AnimatedStyle
-             ]}
-           >
+                  {/* Menu Item 3 - Feedback */}
+                      <Animated.View
+                        pointerEvents={isExpanded ? 'auto' : 'none'}
+                        style={[
+                          {
+                            position: "absolute",
+                            bottom: 224,
+                            right: 0,
+                            zIndex: 1003,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                          },
+                          menuItem3AnimatedStyle
+                        ]}
+                      >
+                         <View style={{
+                           backgroundColor: colors.glass.background,
+                           paddingHorizontal: 14,
+                           paddingVertical: 6,
+                           borderRadius: 16,
+                           marginRight: 12,
+                           borderWidth: 1,
+                           borderColor: colors.glass.border,
+                           minWidth: 100,
+                           ...shadows.md,
+              }}>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: colors.text.primary,
+                    fontSize: typography.sizes.sm,
+                    fontWeight: '600',
+                    fontFamily: typography.fonts.primary,
+                  }}>
+                  Feedback
+                </Text>
+              </View>
+
               <TouchableOpacity
-                onPress={() => handleMenuItemPress('settings')}
+                onPress={() => handleMenuItemPress('feedback')}
                 style={{
                   width: 56,
                   height: 56,
@@ -155,35 +197,50 @@ export default function FloatingActionButton({ onPress, onSettingsPress, insets 
                   ...shadows.lg,
                 }}
                 activeOpacity={0.7}
-                {...getAccessibilityProps('Ustawienia', 'Otwórz ustawienia aplikacji')}
+                {...getAccessibilityProps('Feedback', 'Otwórz stronę feedbacku')}
               >
-                <Settings size={24} color={colors.text.secondary} />
+                <MessageSquare size={24} color={colors.text.secondary} />
               </TouchableOpacity>
-              <Text style={{
-                color: colors.text.tertiary,
-                fontSize: typography.sizes.xs,
-                fontWeight: '500',
-                textAlign: 'center',
-                marginTop: spacing.xs,
-                fontFamily: typography.fonts.primary,
-              }}>
-                Ustawienia
-              </Text>
           </Animated.View>
 
-                     {/* Menu Item 1 - Add Project */}
+           {/* Menu Item 1 - Add Project */}
            <Animated.View
              pointerEvents={isExpanded ? 'auto' : 'none'}
              style={[
                {
                  position: "absolute",
-                 bottom: 168, // Higher position to avoid overlap
+                 bottom: 152,
                  right: 0,
                  zIndex: 1002,
+                 flexDirection: 'row',
+                 alignItems: 'center',
+                 justifyContent: 'flex-end',
                },
                menuItem1AnimatedStyle
              ]}
            >
+                            <View style={{
+                              backgroundColor: colors.glass.background,
+                              paddingHorizontal: 14,
+                              paddingVertical: 6,
+                              borderRadius: 16,
+                              marginRight: 12,
+                              borderWidth: 1,
+                              borderColor: colors.glass.border,
+                              minWidth: 120,
+                              ...shadows.md,
+                            }}>
+                              <Text
+                                numberOfLines={1}
+                                style={{
+                                  color: colors.text.primary,
+                                  fontSize: typography.sizes.sm,
+                                  fontWeight: '600',
+                                  fontFamily: typography.fonts.primary,
+                                }}>
+                                Nowy projekt
+                              </Text>
+                            </View>
               <TouchableOpacity
                 onPress={() => handleMenuItemPress('add-project')}
                 style={{
@@ -202,16 +259,65 @@ export default function FloatingActionButton({ onPress, onSettingsPress, insets 
               >
                 <FolderPlus size={24} color={colors.text.secondary} />
               </TouchableOpacity>
-              <Text style={{
-                color: colors.text.tertiary,
-                fontSize: typography.sizes.xs,
-                fontWeight: '500',
-                textAlign: 'center',
-                marginTop: spacing.xs,
-                fontFamily: typography.fonts.primary,
+          </Animated.View>
+
+           {/* Menu Item 2 - Settings */}
+           <Animated.View
+             pointerEvents={isExpanded ? 'auto' : 'none'}
+             style={[
+               {
+                 position: "absolute",
+                 bottom: 80,
+                 right: 0,
+                 zIndex: 1002,
+                 flexDirection: 'row',
+                 alignItems: 'center',
+                 justifyContent: 'flex-end',
+               },
+               menuItem2AnimatedStyle
+             ]}
+           >
+              <View style={{
+                backgroundColor: colors.glass.background,
+                paddingHorizontal: 14,
+                paddingVertical: 6,
+                borderRadius: 16,
+                marginRight: 12,
+                borderWidth: 1,
+                borderColor: colors.glass.border,
+                minWidth: 100,
+                ...shadows.md,
               }}>
-                Nowy projekt
-              </Text>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: colors.text.primary,
+                    fontSize: typography.sizes.sm,
+                    fontWeight: '600',
+                    fontFamily: typography.fonts.primary,
+                  }}>
+                  Ustawienia
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => handleMenuItemPress('settings')}
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  backgroundColor: colors.glass.background,
+                  borderWidth: 1,
+                  borderColor: colors.glass.border,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  ...shadows.lg,
+                }}
+                activeOpacity={0.7}
+                {...getAccessibilityProps('Ustawienia', 'Otwórz ustawienia aplikacji')}
+              >
+                <Settings size={24} color={colors.text.secondary} />
+              </TouchableOpacity>
           </Animated.View>
 
       {/* Main FAB with Glow Effect */}

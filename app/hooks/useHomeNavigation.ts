@@ -31,6 +31,10 @@ export function useHomeNavigation() {
     setShowSettings(true);
   };
 
+  const handleFeedback = () => {
+    router.push('/feedback');
+  };
+
   const closeAddModal = () => {
     setShowAddModal(false);
   };
@@ -64,6 +68,7 @@ export function useHomeNavigation() {
     handleDeleteProject,
     handleLogout,
     handleSettings,
+    handleFeedback,
     
     // Close functions
     closeAddModal,

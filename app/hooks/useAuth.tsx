@@ -4,6 +4,7 @@ import type { User, Session } from '@supabase/supabase-js';
 import { StorageService } from '../utils/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils/logger';
+import { rateLimiter, sanitizeEmail } from '../utils/security';
 
 interface AuthContextType {
   user: User | null;
@@ -163,14 +164,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const createUserProfile = async (userId: string, email: string, firstName?: string, lastName?: string) => {
     try {
+      // Use upsert to insert OR update if profile already exists
       const { error } = await sharedSupabase
         .from('profiles')
-        .insert({
+        .upsert({
           id: userId,
           email: email.toLowerCase(),
           first_name: firstName || null,
           last_name: lastName || null,
           full_name: firstName && lastName ? `${firstName} ${lastName}` : null,
+        }, {
+          onConflict: 'id' // Handle conflict on id column
         });
 
       if (error) {
@@ -269,14 +273,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    // Rate limit password reset requests
+    const identifier = sanitizeEmail(email);
+    const rateLimitResult = await rateLimiter.checkAndRecord('auth:password_reset', identifier);
+
+    if (!rateLimitResult.allowed) {
+      return {
+        error: {
+          message: rateLimitResult.message || 'Zbyt wiele prób resetowania hasła. Spróbuj później.',
+        },
+      };
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email.toLowerCase().trim());
     return { error };
   };
 
   const resendConfirmation = async (email: string) => {
+    // Rate limit confirmation email resends
+    const identifier = sanitizeEmail(email);
+    const rateLimitResult = await rateLimiter.checkAndRecord('auth:resend_confirmation', identifier);
+
+    if (!rateLimitResult.allowed) {
+      return {
+        error: {
+          message: rateLimitResult.message || 'Zbyt wiele prób. Spróbuj później.',
+        },
+      };
+    }
+
     const { error } = await supabase.auth.resend({
       type: 'signup',
-      email: email,
+      email: email.toLowerCase().trim(),
     });
     return { error };
   };

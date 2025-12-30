@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
 import { logger } from "./logger";
+import { sanitizeJsonParse, sanitizeForStorage, rateLimiter } from "./security";
 
 // Simple UUID v4 generator for React Native
 export function generateUUID(): string {
@@ -183,18 +184,13 @@ export const StorageService = {
             };
           });
 
-          // Parse room data from description JSON
-          let parsedDescription: any = {};
-          try {
-            if (dbRoom.description) {
-              parsedDescription = JSON.parse(dbRoom.description);
-            }
-          } catch (error) {
-            logger.warn(`[StorageService] Failed to parse room description for ${dbRoom.id}:`, error);
-            parsedDescription = {
-              shape: dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle'
-            };
-          }
+          // Parse room data from description JSON with safe parsing
+          const defaultDescription = {
+            shape: dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle' as const
+          };
+          const parsedDescription = dbRoom.description
+            ? sanitizeJsonParse(dbRoom.description, defaultDescription)
+            : defaultDescription;
 
           const shape = parsedDescription.shape || (dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle');
           const dimensions = parsedDescription.dimensions || (() => {
@@ -251,6 +247,18 @@ export const StorageService = {
 
   async forceSyncFromDatabase(userId: string): Promise<Project[]> {
     try {
+      // Rate limit sync operations
+      const rateLimitResult = await rateLimiter.checkAndRecord('db:sync', userId);
+      if (!rateLimitResult.allowed) {
+        logger.warn('[StorageService] Sync rate limited for user:', userId);
+        // Return cached data if available
+        const cached = PROJECT_CACHE[userId];
+        if (cached) {
+          return cached.projects;
+        }
+        return [];
+      }
+
       // Clear cache to force fresh data
       delete PROJECT_CACHE[userId];
 
@@ -613,16 +621,13 @@ export const StorageService = {
               };
             });
 
-            let parsedDescription: any = {};
-            try {
-              if (dbRoom.description) {
-                parsedDescription = JSON.parse(dbRoom.description);
-              }
-            } catch (error) {
-              parsedDescription = {
-                shape: dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle'
-              };
-            }
+            // Parse room data from description JSON with safe parsing
+            const defaultDesc = {
+              shape: dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle' as const
+            };
+            const parsedDescription = dbRoom.description
+              ? sanitizeJsonParse(dbRoom.description, defaultDesc)
+              : defaultDesc;
 
             const shape = parsedDescription.shape || (dbRoom.description?.includes('l-shape') ? 'l-shape' : 'rectangle');
             const dimensions = parsedDescription.dimensions || (() => {

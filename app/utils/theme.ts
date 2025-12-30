@@ -65,6 +65,24 @@ export const colors = {
     pink: '#EC4899',
     orange: '#F97316',
   },
+
+  // RenoTimeline design colors
+  renoTimeline: {
+    cyan: '#5DD5D5',          // Primary cyan/teal accent
+    cyanGlow: '#7DE5E5',      // Lighter cyan for glow
+    magenta: '#EC4899',       // Magenta/pink accent
+    purple: '#A855F7',        // Purple highlight
+    purpleLight: '#C084FC',   // Light purple
+    gradientStart: '#3B82F6', // Blue start for buttons
+    gradientEnd: '#EC4899',   // Pink/magenta end for buttons
+  },
+
+  // Particle colors for background animation
+  particles: {
+    primary: 'rgba(93, 213, 213, 0.3)',    // Cyan particles
+    secondary: 'rgba(168, 85, 247, 0.25)', // Purple particles
+    tertiary: 'rgba(236, 72, 153, 0.2)',   // Magenta particles
+  },
 };
 
 // Gradient configurations
@@ -106,6 +124,12 @@ export const gradients = {
   },
   fab: {
     colors: [colors.primary.start, colors.accent.purple] as [string, string],
+    start: { x: 0, y: 0 },
+    end: { x: 1, y: 1 },
+  },
+  // RenoTimeline button gradient (blue → purple → magenta)
+  renoButton: {
+    colors: ['#3B82F6', '#A855F7', '#EC4899'] as [string, string, string],
     start: { x: 0, y: 0 },
     end: { x: 1, y: 1 },
   },

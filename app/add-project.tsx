@@ -14,8 +14,14 @@ import { useToast } from "./hooks/useToast";
 import { useRouter } from "expo-router";
 import { ArrowLeft, Save, Calendar, X, CheckCircle, AlertCircle } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { StorageService, Project } from "./utils/storage";
+import { StorageService, Project, generateUUID } from "./utils/storage";
 import { colors, gradients, typography, spacing, borderRadius, shadows, glassmorphism } from "./utils/theme";
+import {
+  rateLimiter,
+  createProjectSchema,
+  validateWithSchema,
+  sanitizeForStorage,
+} from "./utils/security";
 
 type ProjectStatus = "W trakcie" | "Planowany" | "Zakończony" | "Wstrzymany";
 
@@ -180,39 +186,49 @@ export default function AddProjectScreen() {
   }), []);
 
   const handleSave = useCallback(async () => {
-    if (!formData.name.trim()) {
-      showError("Błąd", "Nazwa projektu jest wymagana");
+    // Check rate limit first
+    const rateLimitResult = await rateLimiter.checkAndRecord('api:project_create');
+
+    if (!rateLimitResult.allowed) {
+      showError("Błąd", rateLimitResult.message || "Zbyt wiele prób. Spróbuj później.");
       return;
     }
 
-    if (!formData.endDate) {
-      showError("Błąd", "Data zakończenia jest wymagana");
-      return;
-    }
+    // Validate using Zod schema
+    const validationResult = validateWithSchema(createProjectSchema, {
+      name: formData.name,
+      description: formData.description,
+      status: formData.status,
+      startDate: formData.startDate,
+      endDate: formData.endDate,
+    });
 
-    if (new Date(formData.startDate) >= new Date(formData.endDate)) {
-      showError(
-        "Błąd",
-        "Data zakończenia musi być późniejsza niż data rozpoczęcia",
-      );
+    if (!validationResult.success) {
+      // Show first validation error
+      const firstError = Object.values(validationResult.errors)[0];
+      showError("Błąd walidacji", firstError || "Sprawdź wprowadzone dane");
       return;
     }
 
     try {
       setSaving(true);
 
+      // Use UUID instead of timestamp for project ID
       const newProject: Project = {
-        id: Date.now().toString(),
-        name: formData.name.trim(),
+        id: generateUUID(),
+        name: sanitizeForStorage(formData.name.trim()),
         status: formData.status,
         startDate: formData.startDate,
         endDate: formData.endDate,
         isPinned: false,
-        description: formData.description.trim(),
+        description: sanitizeForStorage(formData.description.trim()),
         rooms: [],
       };
 
       await StorageService.addProject(newProject);
+
+      // Clear rate limit on success
+      await rateLimiter.recordSuccess('api:project_create');
 
       showSuccess("Sukces", "Projekt został utworzony");
       setTimeout(() => {

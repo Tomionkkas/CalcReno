@@ -119,7 +119,7 @@ export function AuthInput({
     const borderColor = interpolate(
       focusAnim.value,
       [0, 1],
-      ['rgba(108, 99, 255, 0.3)', 'rgba(108, 99, 255, 0.8)'],
+      ['rgba(93, 213, 213, 0.3)', 'rgba(93, 213, 213, 0.8)'],
       Extrapolate.CLAMP
     );
 
@@ -165,7 +165,7 @@ export function AuthInput({
     const iconColor = interpolate(
       focusAnim.value,
       [0, 1],
-      ['rgba(255, 255, 255, 0.6)', 'rgba(108, 99, 255, 1)'],
+      ['rgba(255, 255, 255, 0.6)', 'rgba(93, 213, 213, 1)'],
       Extrapolate.CLAMP
     );
 
@@ -259,10 +259,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(30, 33, 57, 0.8)',
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.3)',
+    borderColor: 'rgba(93, 213, 213, 0.3)',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    shadowColor: '#6C63FF',
+    shadowColor: '#5DD5D5',
     shadowOffset: {
       width: 0,
       height: 4,

@@ -1,4 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import {
+  rateLimiter,
+  loginFormSchema,
+  signupFormSchema,
+  validateWithSchema,
+  sanitizeEmail,
+} from '../../utils/security';
 
 interface FormData {
   email: string;
@@ -12,6 +19,7 @@ interface FormErrors {
   password?: string;
   firstName?: string;
   lastName?: string;
+  general?: string;
 }
 
 interface UseAuthFormProps {
@@ -29,39 +37,58 @@ export function useAuthForm({ isLogin, onSubmit }: UseAuthFormProps) {
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
+  const [remainingAttempts, setRemainingAttempts] = useState<number | null>(null);
+
+  // Check rate limit status on mount and when email changes
+  useEffect(() => {
+    const checkRateLimit = async () => {
+      if (formData.email) {
+        const action = isLogin ? 'auth:login' : 'auth:signup';
+        const remaining = await rateLimiter.getRemainingAttempts(
+          action,
+          sanitizeEmail(formData.email)
+        );
+        setRemainingAttempts(remaining);
+      }
+    };
+    checkRateLimit();
+  }, [formData.email, isLogin]);
 
   const validateForm = useCallback((): boolean => {
-    const newErrors: FormErrors = {};
+    // Use Zod schemas for validation
+    const schema = isLogin ? loginFormSchema : signupFormSchema;
+    const dataToValidate = isLogin
+      ? { email: formData.email, password: formData.password }
+      : formData;
 
-    // Email validation
-    if (!formData.email) {
-      newErrors.email = 'Email jest wymagany';
-    } else if (!formData.email.includes('@')) {
-      newErrors.email = 'Nieprawidłowy format email';
+    const result = validateWithSchema(schema, dataToValidate);
+
+    if (!result.success) {
+      setErrors(result.errors as FormErrors);
+      return false;
     }
 
-    // Password validation
-    if (!formData.password) {
-      newErrors.password = 'Hasło jest wymagane';
-    } else if (!isLogin && formData.password.length < 6) {
-      newErrors.password = 'Hasło musi mieć minimum 6 znaków';
-    }
-
-    // Name validation for registration
-    if (!isLogin) {
-      if (!formData.firstName) {
-        newErrors.firstName = 'Imię jest wymagane';
-      }
-      if (!formData.lastName) {
-        newErrors.lastName = 'Nazwisko jest wymagane';
-      }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setErrors({});
+    return true;
   }, [formData, isLogin]);
 
   const handleSubmit = useCallback(async () => {
+    // Check rate limit before validation
+    const action = isLogin ? 'auth:login' : 'auth:signup';
+    const identifier = sanitizeEmail(formData.email);
+
+    const rateLimitResult = await rateLimiter.checkAndRecord(action, identifier);
+
+    if (!rateLimitResult.allowed) {
+      setErrors({
+        general: rateLimitResult.message || 'Zbyt wiele prób. Spróbuj później.',
+      });
+      setRemainingAttempts(0);
+      return;
+    }
+
+    setRemainingAttempts(rateLimitResult.remainingAttempts);
+
     if (!validateForm()) {
       return;
     }
@@ -69,18 +96,27 @@ export function useAuthForm({ isLogin, onSubmit }: UseAuthFormProps) {
     setLoading(true);
     try {
       await onSubmit(formData);
+      // On successful auth, clear rate limit
+      await rateLimiter.recordSuccess(action, identifier);
     } catch (error) {
       // Error handling is done in the parent component
     } finally {
       setLoading(false);
     }
-  }, [formData, validateForm, onSubmit]);
+  }, [formData, validateForm, onSubmit, isLogin]);
 
   const updateField = useCallback((field: keyof FormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    // Sanitize email input
+    const sanitizedValue = field === 'email' ? value.toLowerCase().trim() : value;
+
+    setFormData(prev => ({ ...prev, [field]: sanitizedValue }));
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+    // Clear general error when user makes changes
+    if (errors.general) {
+      setErrors(prev => ({ ...prev, general: undefined }));
     }
   }, [errors]);
 
@@ -96,5 +132,6 @@ export function useAuthForm({ isLogin, onSubmit }: UseAuthFormProps) {
     handleSubmit,
     clearErrors,
     setErrors,
+    remainingAttempts,
   };
 }

@@ -240,9 +240,9 @@ function AppContent() {
           },
         }} 
       />
-      <Stack.Screen 
-        name="project/[id]" 
-        options={{ 
+      <Stack.Screen
+        name="project/[id]"
+        options={{
           headerShown: false,
           contentStyle: { backgroundColor: '#0A0B1E' },
           animation: 'slide_from_right',
@@ -264,7 +264,57 @@ function AppContent() {
               },
             },
           },
-        }} 
+        }}
+      />
+      <Stack.Screen
+        name="feedback"
+        options={{
+          headerShown: false,
+          contentStyle: { backgroundColor: '#0A0B1E' },
+          animation: 'slide_from_right',
+          animationDuration: 90,
+          transitionSpec: {
+            open: {
+              animation: 'timing',
+              config: {
+                duration: 90,
+                easing: 'cubic-bezier(0.4, 0.0, 1, 1)',
+              },
+            },
+            close: {
+              animation: 'timing',
+              config: {
+                duration: 70,
+                easing: 'cubic-bezier(0.4, 0.0, 1, 1)',
+              },
+            },
+          },
+        }}
+      />
+      <Stack.Screen
+        name="feedback/[id]"
+        options={{
+          headerShown: false,
+          contentStyle: { backgroundColor: '#0A0B1E' },
+          animation: 'slide_from_right',
+          animationDuration: 90,
+          transitionSpec: {
+            open: {
+              animation: 'timing',
+              config: {
+                duration: 90,
+                easing: 'cubic-bezier(0.4, 0.0, 1, 1)',
+              },
+            },
+            close: {
+              animation: 'timing',
+              config: {
+                duration: 70,
+                easing: 'cubic-bezier(0.4, 0.0, 1, 1)',
+              },
+            },
+          },
+        }}
       />
     </Stack>
   );

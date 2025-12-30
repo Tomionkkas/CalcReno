@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>myapp</string>
-          <string>com.tomionkka.testtempo</string>
+          <string>com.tomionkka.calcreno</string>
         </array>
       </dict>
     </array>

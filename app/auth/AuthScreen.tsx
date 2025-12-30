@@ -299,9 +299,8 @@ export function AuthScreen() {
               />
               </View>
 
-              {/* Benefits Section - Bottom */}
+              {/* Footer Section - Bottom */}
               <View style={{ flex: 0.2, justifyContent: 'flex-end' }}>
-                <BenefitsSection />
                 <FooterSection />
               </View>
             </View>

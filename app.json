@@ -10,14 +10,14 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.tomionkka.testtempo"
+      "bundleIdentifier": "com.tomionkka.calcreno"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.tomionkka.testtempo"
+      "package": "com.tomionkka.calcreno"
     },
     "web": {
       "bundler": "metro",

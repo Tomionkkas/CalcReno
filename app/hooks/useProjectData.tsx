@@ -3,6 +3,13 @@ import { Platform } from "react-native";
 import { useFocusEffect } from 'expo-router';
 import { StorageService, Project, Room, generateUUID } from "../utils/storage";
 import { useAuth } from "./useAuth";
+import {
+  rateLimiter,
+  createRoomSchema,
+  validateWithSchema,
+  sanitizeForStorage,
+  parseNumber,
+} from "../utils/security";
 
 export function useProjectData(id: string | undefined, showError: (title: string, message?: string) => void, showSuccess: (title: string, message?: string) => void, showConfirm?: (title: string, message: string, onConfirm: () => void) => void) {
   const [project, setProject] = useState<Project | null>(null);
@@ -84,6 +91,13 @@ export function useProjectData(id: string | undefined, showError: (title: string
   }, editingRoom: Room | null) => {
     if (!project) return;
 
+    // Rate limit room creation/updates
+    const rateLimitResult = await rateLimiter.checkAndRecord('api:room_create', user?.id);
+    if (!rateLimitResult.allowed) {
+      showError("Błąd", rateLimitResult.message || "Zbyt wiele prób. Spróbuj później.");
+      return;
+    }
+
     console.log("handleSaveRoom: Starting room save", {
       editingRoomId: editingRoom?.id,
       projectRoomsCount: project.rooms.length,
@@ -100,20 +114,46 @@ export function useProjectData(id: string | undefined, showError: (title: string
       editingRoom?.name ||
       `Pomieszczenie ${project.rooms.length + 1}`;
 
+    // Sanitize room name
+    const sanitizedRoomName = sanitizeForStorage(roomName);
+
+    // Validate and sanitize dimensions
+    const sanitizedDimensions = {
+      width: parseNumber(roomData.dimensions?.width, 4, 0.1, 100),
+      length: parseNumber(roomData.dimensions?.length, 4, 0.1, 100),
+      height: parseNumber(roomData.dimensions?.height, 2.5, 1, 10),
+      ...(roomData.shape === 'l-shape' && {
+        width2: parseNumber(roomData.dimensions?.width2, 2, 0.1, 100),
+        length2: parseNumber(roomData.dimensions?.length2, 2, 0.1, 100),
+      }),
+    };
+
+    // Validate and sanitize elements
+    const sanitizedElements = (roomData.elements || [])
+      .slice(0, 50) // Limit to 50 elements max
+      .map(el => ({
+        id: el.id || generateUUID(),
+        type: el.type === 'door' || el.type === 'window' ? el.type : 'door',
+        width: parseNumber(el.width, 1, 0.1, 10),
+        height: parseNumber(el.height, 2, 0.1, 5),
+        position: parseNumber(el.position, 0, 0, 100),
+        wall: parseNumber(el.wall, 1, 1, 6),
+      }));
+
     console.log("handleSaveRoom: Room info", {
       isEditing,
       roomId,
-      roomName,
+      roomName: sanitizedRoomName,
       existingRoomIds: project.rooms.map(r => r.id),
       platform: Platform.OS
     });
 
     const newRoom: Room = {
       id: roomId,
-      name: roomName,
+      name: sanitizedRoomName,
       shape: roomData.shape,
-      dimensions: roomData.dimensions,
-      elements: roomData.elements,
+      dimensions: sanitizedDimensions,
+      elements: sanitizedElements,
       corner: roomData.corner,
     };
 

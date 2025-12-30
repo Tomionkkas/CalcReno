@@ -11,6 +11,7 @@ import Animated, {
   Extrapolate,
   Easing,
 } from 'react-native-reanimated';
+import { ParticleBackground } from './ParticleBackground';
 
 const { width, height } = Dimensions.get('window');
 
@@ -134,37 +135,27 @@ export function AnimatedBackground({ children, deviceCapabilities }: AnimatedBac
         style={styles.baseGradient}
       />
 
-      {/* Animated Gradient Overlay */}
+      {/* Animated Gradient Overlay - RenoTimeline colors */}
       <Animated.View style={[styles.gradientOverlay, gradientAnimatedStyle]}>
         <LinearGradient
           colors={[
-            'rgba(108, 99, 255, 0.1)',
-            'rgba(108, 99, 255, 0.05)',
-            'rgba(108, 99, 255, 0.1)',
+            'rgba(93, 213, 213, 0.08)',
+            'rgba(168, 85, 247, 0.06)',
+            'rgba(236, 72, 153, 0.05)',
           ]}
           style={styles.animatedGradient}
         />
       </Animated.View>
 
-      {/* Animated Background Elements */}
+      {/* Animated Background Elements - Reduced for minimal design */}
       <Animated.View style={[styles.backgroundElements, backgroundAnimatedStyle]} pointerEvents="none">
-        {/* Glow Orbs */}
+        {/* Glow Orbs - Keep only 2 for subtle effect */}
         <View style={[styles.glowOrb, styles.glowOrb1]} />
         <View style={[styles.glowOrb, styles.glowOrb2]} />
-        <View style={[styles.glowOrb, styles.glowOrb3]} />
-        
-        {/* Geometric Shapes */}
-        <View style={[styles.geometricShape, styles.shape1]} />
-        <View style={[styles.geometricShape, styles.shape2]} />
-        <View style={[styles.geometricShape, styles.shape3]} />
       </Animated.View>
 
-      {/* Animated Particles */}
-      <Animated.View style={[styles.particlesContainer, particlesAnimatedStyle]}>
-        <View style={styles.particle1} />
-        <View style={styles.particle2} />
-        <View style={styles.particle3} />
-      </Animated.View>
+      {/* New Particle Background Animation */}
+      <ParticleBackground deviceCapabilities={deviceCapabilities} />
 
       {/* Content */}
       <View style={styles.contentContainer}>
@@ -206,32 +197,34 @@ const styles = StyleSheet.create({
   glowOrb: {
     position: 'absolute',
     borderRadius: 50,
-    shadowColor: '#6C63FF',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 10,
   },
   glowOrb1: {
-    width: 120,
-    height: 120,
-    top: '10%',
+    width: 100,
+    height: 100,
+    top: '15%',
     left: '10%',
-    backgroundColor: 'rgba(108, 99, 255, 0.1)',
+    backgroundColor: 'rgba(93, 213, 213, 0.06)',
+    shadowColor: '#5DD5D5',
   },
   glowOrb2: {
-    width: 80,
-    height: 80,
-    top: '60%',
+    width: 70,
+    height: 70,
+    top: '65%',
     right: '15%',
-    backgroundColor: 'rgba(108, 99, 255, 0.08)',
+    backgroundColor: 'rgba(168, 85, 247, 0.05)',
+    shadowColor: '#A855F7',
   },
   glowOrb3: {
     width: 60,
     height: 60,
     bottom: '20%',
     left: '20%',
-    backgroundColor: 'rgba(108, 99, 255, 0.06)',
+    backgroundColor: 'rgba(236, 72, 153, 0.06)',
+    shadowColor: '#EC4899',
   },
   geometricShape: {
     position: 'absolute',
@@ -242,7 +235,7 @@ const styles = StyleSheet.create({
     height: 40,
     top: '30%',
     right: '10%',
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#5DD5D5',
     transform: [{ rotate: '45deg' }],
   },
   shape2: {
@@ -250,7 +243,7 @@ const styles = StyleSheet.create({
     height: 30,
     bottom: '40%',
     left: '5%',
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#A855F7',
     borderRadius: 15,
   },
   shape3: {
@@ -258,7 +251,7 @@ const styles = StyleSheet.create({
     height: 25,
     top: '70%',
     right: '25%',
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#EC4899',
     borderRadius: 12.5,
   },
   particlesContainer: {
@@ -274,7 +267,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(108, 99, 255, 0.3)',
+    backgroundColor: 'rgba(93, 213, 213, 0.3)',
     top: '20%',
     left: '15%',
   },
@@ -283,7 +276,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(108, 99, 255, 0.2)',
+    backgroundColor: 'rgba(168, 85, 247, 0.25)',
     top: '60%',
     right: '20%',
   },
@@ -292,7 +285,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: 'rgba(108, 99, 255, 0.25)',
+    backgroundColor: 'rgba(236, 72, 153, 0.2)',
     bottom: '30%',
     left: '25%',
   },
