@@ -41,13 +41,15 @@ interface EnhancedDoorWindowModalProps {
   visible: boolean;
   elementType: ElementType;
   availableWalls: WallInfo[];
+  initialSelectedWall?: number | null;
+  initialElement?: Element | null;
   onSave: (element: Omit<Element, "id">) => void;
   onClose: () => void;
   onError: (title: string, message: string) => void;
 }
 
 interface PositionMethod {
-  type: "percentage" | "distance-from-left" | "distance-from-right" | "center-offset";
+  type: "distance-from-left" | "distance-from-right";
   label: string;
   description: string;
   icon: React.ReactNode;
@@ -55,29 +57,17 @@ interface PositionMethod {
 
 const POSITION_METHODS: PositionMethod[] = [
   {
-    type: "percentage",
-    label: "Procent ściany",
-    description: "Pozycja jako procent długości ściany",
-    icon: <Text style={{ fontSize: 16, color: "white" }}>%</Text>
-  },
-  {
     type: "distance-from-left",
     label: "Odległość od lewej",
-    description: "Dystans od lewego końca ściany",
+    description: "Dystans od lewej krawędzi ściany do lewej krawędzi elementu",
     icon: <Text style={{ fontSize: 16, color: "white" }}>←</Text>
   },
   {
-    type: "distance-from-right", 
+    type: "distance-from-right",
     label: "Odległość od prawej",
-    description: "Dystans od prawego końca ściany",
+    description: "Dystans od prawej krawędzi ściany do prawej krawędzi elementu",
     icon: <Text style={{ fontSize: 16, color: "white" }}>→</Text>
   },
-  {
-    type: "center-offset",
-    label: "Przesunięcie od środka",
-    description: "Przesunięcie od środka ściany",
-    icon: <Text style={{ fontSize: 16, color: "white" }}>↔</Text>
-  }
 ];
 
 // Enhanced validation display with animations
@@ -125,10 +115,14 @@ const ValidationDisplay = memo(({ wall, elementWidth, calculatedPosition }: {
   );
 });
 
+ValidationDisplay.displayName = 'ValidationDisplay';
+
 export default function EnhancedDoorWindowModal({
   visible,
   elementType,
   availableWalls,
+  initialSelectedWall,
+  initialElement,
   onSave,
   onClose,
   onError,
@@ -136,7 +130,7 @@ export default function EnhancedDoorWindowModal({
   const [elementWidth, setElementWidth] = useState("");
   const [elementHeight, setElementHeight] = useState("");
   const [selectedWall, setSelectedWall] = useState(0);
-  const [positionMethod, setPositionMethod] = useState<PositionMethod["type"]>("percentage");
+  const [positionMethod, setPositionMethod] = useState<PositionMethod["type"]>("distance-from-left");
   const [positionValue, setPositionValue] = useState("");
   const [calculatedPosition, setCalculatedPosition] = useState(50);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
@@ -144,44 +138,62 @@ export default function EnhancedDoorWindowModal({
   // Reset form when modal opens/closes or element type changes
   useEffect(() => {
     if (visible) {
-      setElementWidth(elementType === "door" ? "0.9" : "1.0");
-      setElementHeight(elementType === "door" ? "2.0" : "1.2");
-      setSelectedWall(0);
-      setPositionMethod("percentage");
-      setPositionValue("50");
-      setCalculatedPosition(50);
-      setFocusedInput(null);
+      if (initialElement) {
+        // Editing mode - pre-fill with existing element data
+        setElementWidth((initialElement.width / 100).toString());
+        setElementHeight((initialElement.height / 100).toString());
+        setSelectedWall(initialElement.wall);
+        setCalculatedPosition(initialElement.position);
+        setPositionMethod("distance-from-left");
+        setPositionValue("0.5"); // Default value
+        setFocusedInput(null);
+      } else {
+        // Add mode - use defaults
+        setElementWidth(elementType === "door" ? "0.9" : "1.0");
+        setElementHeight(elementType === "door" ? "2.0" : "1.2");
+        // Use initialSelectedWall if provided and valid, otherwise default to 0
+        const wallIndex = (initialSelectedWall !== null && initialSelectedWall !== undefined && initialSelectedWall >= 0 && initialSelectedWall < availableWalls.length)
+          ? initialSelectedWall
+          : 0;
+        setSelectedWall(wallIndex);
+        setPositionMethod("distance-from-left");
+        setPositionValue("0.5");
+        setCalculatedPosition(50);
+        setFocusedInput(null);
+      }
     }
-  }, [visible, elementType]);
+  }, [visible, elementType, initialSelectedWall, availableWalls.length, initialElement]);
 
   // Calculate position percentage based on method and value with debouncing
+  // Position percentage represents the CENTER of the element on the wall
   useEffect(() => {
     if (!positionValue) return;
-    
+
     const timeoutId = setTimeout(() => {
       const wall = availableWalls[selectedWall];
       if (!wall) return;
 
-      const wallLength = wall.length / 100; // Convert cm to meters
-      const value = parseFloat(positionValue);
+      const wallLengthM = wall.length / 100; // Convert cm to meters
+      const distanceM = parseFloat(positionValue); // Distance in meters
+      const elemWidthM = parseFloat(elementWidth) || 0; // Element width in meters
 
-      if (isNaN(value)) return;
+      if (isNaN(distanceM)) return;
 
       let percentage = 50; // Default to center
 
       switch (positionMethod) {
-        case "percentage":
-          percentage = Math.max(0, Math.min(100, value));
-          break;
         case "distance-from-left":
-          percentage = (value / wallLength) * 100;
+          // Distance from left wall edge to LEFT edge of element
+          // Element center = distance + elementWidth/2
+          const centerFromLeft = distanceM + elemWidthM / 2;
+          percentage = (centerFromLeft / wallLengthM) * 100;
           break;
         case "distance-from-right":
-          percentage = 100 - (value / wallLength) * 100;
-          break;
-        case "center-offset":
-          const centerOffset = (value / wallLength) * 100;
-          percentage = 50 + centerOffset;
+          // Distance from right wall edge to RIGHT edge of element
+          // Element right edge = wallLength - distance
+          // Element center = wallLength - distance - elementWidth/2
+          const centerFromRight = wallLengthM - distanceM - elemWidthM / 2;
+          percentage = (centerFromRight / wallLengthM) * 100;
           break;
       }
 
@@ -189,7 +201,7 @@ export default function EnhancedDoorWindowModal({
     }, 100);
 
     return () => clearTimeout(timeoutId);
-  }, [positionMethod, positionValue, selectedWall]);
+  }, [positionMethod, positionValue, selectedWall, elementWidth]);
 
   const validateAndSave = useCallback(() => {
     try {
@@ -240,75 +252,43 @@ export default function EnhancedDoorWindowModal({
     const wallLengthM = wall.length / 100;
     const isFocused = focusedInput === "position";
 
-      const inputContainerStyle = useMemo(() => ({
-    marginBottom: spacing.sm,
-  }), []);
+    const inputContainerStyle = {
+      marginBottom: spacing.sm,
+    };
 
-      const inputStyle = useMemo(() => ({
-    backgroundColor: isFocused ? colors.background.card + "CC" : colors.background.tertiary,
-    color: colors.text.primary,
-    padding: spacing.sm,
-    borderRadius: borderRadius.md,
-    fontSize: typography.sizes.base,
-    borderWidth: isFocused ? 2 : 1,
-    borderColor: isFocused ? colors.accent.purple : colors.glass.border,
-    ...shadows.sm,
-  }), [isFocused]);
+    const inputStyle = {
+      backgroundColor: isFocused ? colors.background.card + "CC" : colors.background.tertiary,
+      color: colors.text.primary,
+      padding: spacing.sm,
+      borderRadius: borderRadius.md,
+      fontSize: typography.sizes.base,
+      borderWidth: isFocused ? 2 : 1,
+      borderColor: isFocused ? colors.accent.purple : colors.glass.border,
+      ...shadows.sm,
+    };
 
-    switch (positionMethod) {
-      case "percentage":
-        return (
-          <View style={inputContainerStyle}>
-            <Text style={labelStyle}>Wartość (0-100%)</Text>
-            <TextInput
-              style={inputStyle}
-              value={positionValue}
-              onChangeText={(value) => setPositionValue(normalizeDecimalSeparator(value))}
-              onFocus={() => setFocusedInput("position")}
-              onBlur={() => setFocusedInput(null)}
-              placeholder="50"
-              placeholderTextColor={colors.text.muted}
-              keyboardType="numeric"
-            />
-          </View>
-        );
-      case "distance-from-left":
-      case "distance-from-right":
-        return (
-          <View style={inputContainerStyle}>
-            <Text style={labelStyle}>Odległość (metry, max: {wallLengthM.toFixed(2)}m)</Text>
-            <TextInput
-              style={inputStyle}
-              value={positionValue}
-              onChangeText={(value) => setPositionValue(normalizeDecimalSeparator(value))}
-              onFocus={() => setFocusedInput("position")}
-              onBlur={() => setFocusedInput(null)}
-              placeholder="1.0"
-              placeholderTextColor={colors.text.muted}
-              keyboardType="numeric"
-            />
-          </View>
-        );
-      case "center-offset":
-        return (
-          <View style={inputContainerStyle}>
-            <Text style={labelStyle}>Przesunięcie od środka (metry, ±{(wallLengthM/2).toFixed(2)}m)</Text>
-            <TextInput
-              style={inputStyle}
-              value={positionValue}
-              onChangeText={(value) => setPositionValue(normalizeDecimalSeparator(value))}
-              onFocus={() => setFocusedInput("position")}
-              onBlur={() => setFocusedInput(null)}
-              placeholder="0.0"
-              placeholderTextColor={colors.text.muted}
-              keyboardType="numeric"
-            />
-          </View>
-        );
-      default:
-        return null;
-    }
-  }, [positionMethod, positionValue, selectedWall, focusedInput]);
+    const elemWidthM = parseFloat(elementWidth) || 0;
+    const maxDistance = Math.max(0, wallLengthM - elemWidthM);
+    const labelText = positionMethod === "distance-from-left"
+      ? `Odległość od lewej krawędzi (metry, 0 - ${maxDistance.toFixed(2)}m)`
+      : `Odległość od prawej krawędzi (metry, 0 - ${maxDistance.toFixed(2)}m)`;
+
+    return (
+      <View style={inputContainerStyle}>
+        <Text style={labelStyle}>{labelText}</Text>
+        <TextInput
+          style={inputStyle}
+          value={positionValue}
+          onChangeText={(value) => setPositionValue(normalizeDecimalSeparator(value))}
+          onFocus={() => setFocusedInput("position")}
+          onBlur={() => setFocusedInput(null)}
+          placeholder="0.5"
+          placeholderTextColor={colors.text.muted}
+          keyboardType="numeric"
+        />
+      </View>
+    );
+  }, [positionMethod, positionValue, selectedWall, focusedInput, elementWidth, availableWalls]);
 
   const modalOverlayStyle = useMemo(() => ({
     flex: 1,
@@ -558,7 +538,7 @@ export default function EnhancedDoorWindowModal({
                 <X size={20} color={colors.text.primary} />
               </TouchableOpacity>
               <Text style={headerTitleStyle}>
-                Dodaj {elementType === "door" ? "Drzwi" : "Okno"}
+                {initialElement ? "Edytuj" : "Dodaj"} {elementType === "door" ? "Drzwi" : "Okno"}
               </Text>
             </View>
 
@@ -686,7 +666,7 @@ export default function EnhancedDoorWindowModal({
                   end={gradients.primary.end}
                   style={addButtonGradientStyle}
                 >
-                  <Text style={buttonTextStyle}>Dodaj</Text>
+                  <Text style={buttonTextStyle}>{initialElement ? "Zaktualizuj" : "Dodaj"}</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>

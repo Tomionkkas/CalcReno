@@ -60,28 +60,40 @@ export default function LShapeRenderer({
       }}
     >
       <View style={{ width: '100%', height: '100%', position: 'relative' }}>
-        {segments.map((segment, index) => (
-          <View
-            key={index}
-            style={{
-              position: 'absolute',
-              left: segment.x,
-              top: segment.y,
-              width: segment.width,
-              height: segment.height,
-            }}
-          >
-            <LinearGradient
-              colors={isSelected ? gradients.primary.colors : gradients.secondary.colors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+        {segments.map((segment, index) => {
+          // Main room (index 1 - larger segment) vs Extension (index 0 - smaller segment)
+          const isMainRoom = index === 1;
+          const mainColors = isSelected ? gradients.primary.colors : gradients.secondary.colors;
+          const extensionColors = isSelected
+            ? ['#8B5CF6', '#A78BFA'] // Brighter purple for extension when selected
+            : ['rgba(139, 92, 246, 0.6)', 'rgba(167, 139, 250, 0.6)']; // Lighter purple for extension
+
+          return (
+            <View
+              key={index}
               style={{
-                width: '100%',
-                height: '100%',
+                position: 'absolute',
+                left: segment.x,
+                top: segment.y,
+                width: segment.width,
+                height: segment.height,
+                borderWidth: isMainRoom ? 0 : 1,
+                borderColor: 'rgba(139, 92, 246, 0.4)',
+                borderStyle: isMainRoom ? 'solid' : 'dashed',
               }}
-            />
-          </View>
-        ))}
+            >
+              <LinearGradient
+                colors={isMainRoom ? mainColors : extensionColors}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                }}
+              />
+            </View>
+          );
+        })}
         
         {/* Room name overlay */}
         <View

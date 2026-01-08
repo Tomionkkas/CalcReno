@@ -11,6 +11,7 @@ const ElementActions: React.FC<ElementActionsProps> = ({
   availableWalls,
   activeWall,
   onWallSelect,
+  onWallLongPress,
   elements,
   onElementRemove,
   roomShape,
@@ -37,6 +38,7 @@ const ElementActions: React.FC<ElementActionsProps> = ({
         availableWalls={availableWalls}
         activeWall={activeWall}
         onWallSelect={onWallSelect}
+        onWallLongPress={onWallLongPress}
         onElementRemove={onElementRemove}
       />
 

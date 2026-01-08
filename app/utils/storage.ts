@@ -44,6 +44,7 @@ export interface Room {
   elements: RoomElement[];
   materials?: MaterialCalculation;
   corner?: "top-left" | "top-right" | "bottom-left" | "bottom-right"; // For L-shape orientation
+  rotation?: 0 | 90 | 180 | 270; // Visual rotation in degrees
 }
 
 export interface RoomElement {

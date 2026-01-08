@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { Platform, NativeModules } from 'react-native';
+import Constants from 'expo-constants';
 
 const { WidgetModule, WidgetBridgeModule } = NativeModules;
 
@@ -73,12 +74,18 @@ export function useWidgetSync() {
 async function fetchTopTasks(token: string): Promise<any[] | null> {
   try {
     console.log('🔍 [Widget Sync] Fetching tasks from Supabase RPC...');
+    
+    // Use the same fallback pattern as supabase.ts to ensure it works in production
+    const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 
+                            Constants.expoConfig?.extra?.supabaseAnonKey || 
+                            '';
+    
     const response = await fetch(
       'https://kralcmyhjvoiywcpntkg.supabase.co/rest/v1/rpc/get_user_top_tasks',
       {
         method: 'POST',
         headers: {
-          'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
+          'apikey': supabaseAnonKey,
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },

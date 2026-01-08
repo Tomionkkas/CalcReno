@@ -75,51 +75,93 @@ function generateRoomElements(room: CanvasRoom, roomWidth: number, roomHeight: n
  * Calculates room width (matches getRoomWidth from ProjectPlannerTab)
  */
 function getRoomWidth(room: CanvasRoom): number {
+  let width: number;
+  let height: number;
+
   if (room.shape === 'l-shape') {
     const mainWidth = Math.max(40, (room.dimensions.width / 100) * METERS_TO_GRID);
     const additionalWidth = Math.max(20, ((room.dimensions.width2 || 0) / 100) * METERS_TO_GRID);
-    return mainWidth + additionalWidth;
+    width = mainWidth + additionalWidth;
+
+    const mainHeight = (room.dimensions.length / 100) * METERS_TO_GRID;
+    const extHeight = ((room.dimensions.length2 || 0) / 100) * METERS_TO_GRID;
+    height = Math.max(mainHeight, extHeight);
+  } else {
+    width = Math.max(40, (room.dimensions.width / 100) * METERS_TO_GRID);
+    height = Math.max(30, (room.dimensions.length / 100) * METERS_TO_GRID);
   }
-  return Math.max(40, (room.dimensions.width / 100) * METERS_TO_GRID);
+
+  // Swap dimensions for 90° and 270° rotations
+  const rotation = room.rotation || 0;
+  if (rotation === 90 || rotation === 270) {
+    return height; // Swapped!
+  }
+  return width;
 }
 
 /**
  * Calculates room height (matches getRoomHeight from ProjectPlannerTab)
  */
 function getRoomHeight(room: CanvasRoom): number {
-  return Math.max(30, (room.dimensions.length / 100) * METERS_TO_GRID);
+  let width: number;
+  let height: number;
+
+  if (room.shape === 'l-shape') {
+    const mainWidth = Math.max(40, (room.dimensions.width / 100) * METERS_TO_GRID);
+    const additionalWidth = Math.max(20, ((room.dimensions.width2 || 0) / 100) * METERS_TO_GRID);
+    width = mainWidth + additionalWidth;
+
+    const mainHeight = (room.dimensions.length / 100) * METERS_TO_GRID;
+    const extHeight = ((room.dimensions.length2 || 0) / 100) * METERS_TO_GRID;
+    height = Math.max(mainHeight, extHeight);
+  } else {
+    width = Math.max(40, (room.dimensions.width / 100) * METERS_TO_GRID);
+    height = Math.max(30, (room.dimensions.length / 100) * METERS_TO_GRID);
+  }
+
+  // Swap dimensions for 90° and 270° rotations
+  const rotation = room.rotation || 0;
+  if (rotation === 90 || rotation === 270) {
+    return width; // Swapped!
+  }
+  return height;
 }
 
 /**
  * Generates SVG for a rectangular room
  */
 function generateRectangleRoom(room: CanvasRoom, isCleanMode: boolean): string {
-  const width = getRoomWidth(room);
-  const height = getRoomHeight(room);
-  
+  // Calculate unrotated dimensions for rendering
+  const unrotatedWidth = Math.max(40, (room.dimensions.width / 100) * METERS_TO_GRID);
+  const unrotatedHeight = Math.max(30, (room.dimensions.length / 100) * METERS_TO_GRID);
+
   const fillColor = isCleanMode ? "rgba(59, 130, 246, 0.08)" : "rgba(108, 99, 255, 0.4)";
   const strokeColor = isCleanMode ? "#6B7280" : "#6C63FF";
   const textColor = isCleanMode ? "#000000" : "#FFFFFF";
   const dimensionColor = isCleanMode ? "#6B7280" : "#B8BCC8";
 
-  let svg = `<g id="room-${room.id}">\n`;
-  
-  // Room rectangle
-  svg += `  <rect x="${room.x}" y="${room.y}" width="${width}" height="${height}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2" rx="6"/>\n`;
-  
-  // Room name
-  const centerX = room.x + width / 2;
-  const centerY = room.y + height / 2 - 5;
-  svg += `  <text x="${centerX}" y="${centerY}" text-anchor="middle" font-size="10" font-weight="600" fill="${textColor}" font-family="system-ui">${escapeXml(room.name)}</text>\n`;
-  
-  // Room dimensions
+  const rotation = room.rotation || 0;
+  const centerX = room.x + getRoomWidth(room) / 2;
+  const centerY = room.y + getRoomHeight(room) / 2;
+
+  let svg = `<g id="room-${room.id}" transform="rotate(${rotation}, ${centerX}, ${centerY})">\n`;
+
+  // Room rectangle (using unrotated dimensions)
+  svg += `  <rect x="${room.x}" y="${room.y}" width="${unrotatedWidth}" height="${unrotatedHeight}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2" rx="6"/>\n`;
+
+  // Room name (with counter-rotation to keep text upright)
+  const textCenterX = room.x + unrotatedWidth / 2;
+  const textCenterY = room.y + unrotatedHeight / 2 - 5;
+  svg += `  <text x="${textCenterX}" y="${textCenterY}" text-anchor="middle" font-size="10" font-weight="600" fill="${textColor}" font-family="system-ui" transform="rotate(${-rotation}, ${textCenterX}, ${textCenterY})">${escapeXml(room.name)}</text>\n`;
+
+  // Room dimensions (with counter-rotation)
   const dimensionText = `${(room.dimensions.width / 100).toFixed(1)}m × ${(room.dimensions.length / 100).toFixed(1)}m`;
-  svg += `  <text x="${centerX}" y="${centerY + 12}" text-anchor="middle" font-size="8" font-weight="500" fill="${dimensionColor}" font-family="system-ui">${dimensionText}</text>\n`;
-  
+  svg += `  <text x="${textCenterX}" y="${textCenterY + 12}" text-anchor="middle" font-size="8" font-weight="500" fill="${dimensionColor}" font-family="system-ui" transform="rotate(${-rotation}, ${textCenterX}, ${textCenterY + 12})">${dimensionText}</text>\n`;
+
   svg += `</g>\n`;
 
   // Add doors and windows
-  svg += generateRoomElements(room, width, height, isCleanMode);
+  svg += generateRoomElements(room, unrotatedWidth, unrotatedHeight, isCleanMode);
 
   return svg;
 }
@@ -129,30 +171,45 @@ function generateRectangleRoom(room: CanvasRoom, isCleanMode: boolean): string {
  */
 function generateLShapeRoom(room: CanvasRoom, isCleanMode: boolean): string {
   const { width: roomWidth, length: roomLength, width2: roomWidth2 = 0, length2: roomLength2 = 0 } = room.dimensions;
-  
+
   const mainWidth = Math.max(40, (roomWidth / 100) * METERS_TO_GRID);
-  const height = getRoomHeight(room);
+  const mainLength = (roomLength / 100) * METERS_TO_GRID;
   const width2 = Math.max(20, (roomWidth2 / 100) * METERS_TO_GRID);
   const length2 = (roomLength2 / 100) * METERS_TO_GRID;
-  
+
   const totalWidth = mainWidth + width2;
-  
+  const totalHeight = Math.max(mainLength, length2);
+
+  // Calculate Y offset for bottom corners when extension is taller
+  let yOffset = 0;
+  const corner = room.corner || "top-right";
+  if ((corner === "bottom-right" || corner === "bottom-left") && length2 > mainLength) {
+    yOffset = length2 - mainLength;
+  }
+
   // Generate SVG path based on corner orientation
   let pathData = "";
-  const corner = room.corner || "top-right";
-  
+
   switch (corner) {
     case "top-right":
-      pathData = `M ${room.x} ${room.y} L ${room.x + mainWidth} ${room.y} L ${room.x + mainWidth + width2} ${room.y} L ${room.x + mainWidth + width2} ${room.y + length2} L ${room.x + mainWidth} ${room.y + length2} L ${room.x + mainWidth} ${room.y + height} L ${room.x} ${room.y + height} Z`;
+      pathData = `M ${room.x} ${room.y} L ${room.x + mainWidth} ${room.y} L ${room.x + mainWidth + width2} ${room.y} L ${room.x + mainWidth + width2} ${room.y + length2} L ${room.x + mainWidth} ${room.y + length2} L ${room.x + mainWidth} ${room.y + totalHeight} L ${room.x} ${room.y + totalHeight} Z`;
       break;
     case "top-left":
-      pathData = `M ${room.x} ${room.y} L ${room.x + width2} ${room.y} L ${room.x + width2 + mainWidth} ${room.y} L ${room.x + width2 + mainWidth} ${room.y + height} L ${room.x + width2} ${room.y + height} L ${room.x + width2} ${room.y + length2} L ${room.x} ${room.y + length2} Z`;
+      pathData = `M ${room.x} ${room.y} L ${room.x + width2} ${room.y} L ${room.x + width2 + mainWidth} ${room.y} L ${room.x + width2 + mainWidth} ${room.y + totalHeight} L ${room.x + width2} ${room.y + totalHeight} L ${room.x + width2} ${room.y + length2} L ${room.x} ${room.y + length2} Z`;
       break;
     case "bottom-right":
-      pathData = `M ${room.x} ${room.y} L ${room.x + mainWidth} ${room.y} L ${room.x + mainWidth} ${room.y + height - length2} L ${room.x + mainWidth + width2} ${room.y + height - length2} L ${room.x + mainWidth + width2} ${room.y + height} L ${room.x} ${room.y + height} Z`;
+      if (length2 > mainLength) {
+        pathData = `M ${room.x} ${room.y + yOffset} L ${room.x + mainWidth} ${room.y + yOffset} L ${room.x + mainWidth} ${room.y} L ${room.x + mainWidth + width2} ${room.y} L ${room.x + mainWidth + width2} ${room.y + length2} L ${room.x + mainWidth} ${room.y + length2} L ${room.x} ${room.y + length2} Z`;
+      } else {
+        pathData = `M ${room.x} ${room.y} L ${room.x + mainWidth} ${room.y} L ${room.x + mainWidth} ${room.y + totalHeight - length2} L ${room.x + mainWidth + width2} ${room.y + totalHeight - length2} L ${room.x + mainWidth + width2} ${room.y + totalHeight} L ${room.x} ${room.y + totalHeight} Z`;
+      }
       break;
     case "bottom-left":
-      pathData = `M ${room.x + width2} ${room.y} L ${room.x + width2 + mainWidth} ${room.y} L ${room.x + width2 + mainWidth} ${room.y + height} L ${room.x} ${room.y + height} L ${room.x} ${room.y + height - length2} L ${room.x + width2} ${room.y + height - length2} Z`;
+      if (length2 > mainLength) {
+        pathData = `M ${room.x} ${room.y} L ${room.x + width2} ${room.y} L ${room.x + width2} ${room.y + length2} L ${room.x + width2 + mainWidth} ${room.y + length2} L ${room.x + width2 + mainWidth} ${room.y + yOffset} L ${room.x + width2} ${room.y + yOffset} L ${room.x} ${room.y + length2} Z`;
+      } else {
+        pathData = `M ${room.x + width2} ${room.y} L ${room.x + width2 + mainWidth} ${room.y} L ${room.x + width2 + mainWidth} ${room.y + totalHeight} L ${room.x} ${room.y + totalHeight} L ${room.x} ${room.y + totalHeight - length2} L ${room.x + width2} ${room.y + totalHeight - length2} Z`;
+      }
       break;
   }
 
@@ -161,24 +218,28 @@ function generateLShapeRoom(room: CanvasRoom, isCleanMode: boolean): string {
   const textColor = isCleanMode ? "#000000" : "#FFFFFF";
   const dimensionColor = isCleanMode ? "#6B7280" : "#B8BCC8";
 
-  let svg = `<g id="room-${room.id}">\n`;
-  
+  const rotation = room.rotation || 0;
+  const centerX = room.x + getRoomWidth(room) / 2;
+  const centerY = room.y + getRoomHeight(room) / 2;
+
+  let svg = `<g id="room-${room.id}" transform="rotate(${rotation}, ${centerX}, ${centerY})">\n`;
+
   // L-shape path
   svg += `  <path d="${pathData}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>\n`;
-  
-  // Room name (positioned at approximate center)
-  const centerX = room.x + totalWidth / 2;
-  const centerY = room.y + height / 2 - 5;
-  svg += `  <text x="${centerX}" y="${centerY}" text-anchor="middle" font-size="10" font-weight="600" fill="${textColor}" font-family="system-ui">${escapeXml(room.name)}</text>\n`;
-  
-  // Room dimensions
+
+  // Room name (positioned at approximate center with counter-rotation)
+  const textCenterX = room.x + totalWidth / 2;
+  const textCenterY = room.y + totalHeight / 2 - 5;
+  svg += `  <text x="${textCenterX}" y="${textCenterY}" text-anchor="middle" font-size="10" font-weight="600" fill="${textColor}" font-family="system-ui" transform="rotate(${-rotation}, ${textCenterX}, ${textCenterY})">${escapeXml(room.name)}</text>\n`;
+
+  // Room dimensions (with counter-rotation)
   const dimensionText = `${(roomWidth / 100).toFixed(1)}m × ${(roomLength / 100).toFixed(1)}m`;
-  svg += `  <text x="${centerX}" y="${centerY + 12}" text-anchor="middle" font-size="8" font-weight="500" fill="${dimensionColor}" font-family="system-ui">${dimensionText}</text>\n`;
-  
+  svg += `  <text x="${textCenterX}" y="${textCenterY + 12}" text-anchor="middle" font-size="8" font-weight="500" fill="${dimensionColor}" font-family="system-ui" transform="rotate(${-rotation}, ${textCenterX}, ${textCenterY + 12})">${dimensionText}</text>\n`;
+
   svg += `</g>\n`;
 
   // Add doors and windows
-  svg += generateRoomElements(room, totalWidth, height, isCleanMode);
+  svg += generateRoomElements(room, totalWidth, totalHeight, isCleanMode);
 
   return svg;
 }

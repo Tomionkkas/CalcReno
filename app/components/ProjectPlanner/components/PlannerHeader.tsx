@@ -136,7 +136,7 @@ export default function PlannerHeader({
                     letterSpacing: 0.1,
                     textAlign: 'center',
                   }}>
-                    Eksport SVG
+                    Eksport PNG
                   </Text>
                 </TouchableOpacity>
               </View>

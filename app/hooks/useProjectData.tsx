@@ -118,24 +118,29 @@ export function useProjectData(id: string | undefined, showError: (title: string
     const sanitizedRoomName = sanitizeForStorage(roomName);
 
     // Validate and sanitize dimensions
+    // Note: dimensions are stored in centimeters (e.g., 500 = 5 meters)
+    // Constraints: min 10cm (0.1m), max 10000cm (100m) for width/length
+    // Height: min 100cm (1m), max 1000cm (10m)
     const sanitizedDimensions = {
-      width: parseNumber(roomData.dimensions?.width, 4, 0.1, 100),
-      length: parseNumber(roomData.dimensions?.length, 4, 0.1, 100),
-      height: parseNumber(roomData.dimensions?.height, 2.5, 1, 10),
+      width: parseNumber(roomData.dimensions?.width, 400, 10, 10000),
+      length: parseNumber(roomData.dimensions?.length, 400, 10, 10000),
+      height: parseNumber(roomData.dimensions?.height, 250, 100, 1000),
       ...(roomData.shape === 'l-shape' && {
-        width2: parseNumber(roomData.dimensions?.width2, 2, 0.1, 100),
-        length2: parseNumber(roomData.dimensions?.length2, 2, 0.1, 100),
+        width2: parseNumber(roomData.dimensions?.width2, 200, 10, 10000),
+        length2: parseNumber(roomData.dimensions?.length2, 200, 10, 10000),
       }),
     };
 
     // Validate and sanitize elements
+    // Note: element dimensions are stored in centimeters (e.g., 90 = 0.9 meters)
+    // Constraints: min 10cm (0.1m), max 1000cm (10m) for width, max 500cm (5m) for height
     const sanitizedElements = (roomData.elements || [])
       .slice(0, 50) // Limit to 50 elements max
       .map(el => ({
         id: el.id || generateUUID(),
         type: el.type === 'door' || el.type === 'window' ? el.type : 'door',
-        width: parseNumber(el.width, 1, 0.1, 10),
-        height: parseNumber(el.height, 2, 0.1, 5),
+        width: parseNumber(el.width, 100, 10, 1000),
+        height: parseNumber(el.height, 200, 10, 500),
         position: parseNumber(el.position, 0, 0, 100),
         wall: parseNumber(el.wall, 1, 1, 6),
       }));

@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity, Dimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Rect, Line, Circle, Text as SvgText, Path } from "react-native-svg";
+import Svg, { Rect, Line, Circle, Text as SvgText } from "react-native-svg";
 import { WallInfo, calculateElementPosition } from "../utils/shapeCalculations";
 import { DoorOpen, Square, Trash2 } from "lucide-react-native";
 
@@ -31,6 +31,7 @@ interface ProfessionalRoomRendererProps {
   availableWalls: WallInfo[];
   activeWall: number | null;
   onWallSelect: (wallIndex: number) => void;
+  onWallLongPress?: (wallIndex: number) => void;
   onElementRemove: (elementId: string) => void;
   scale?: number;
 }
@@ -55,10 +56,14 @@ export default function ProfessionalRoomRenderer({
   availableWalls,
   activeWall,
   onWallSelect,
+  onWallLongPress,
   onElementRemove,
   scale = 1,
 }: ProfessionalRoomRendererProps) {
-  
+
+  // State for hover/press feedback
+  const [pressedWall, setPressedWall] = React.useState<number | null>(null);
+
   // Calculate optimal scale to fit room nicely
   const { scaledDimensions, scaleFactor } = useMemo(() => {
     const maxDim = Math.max(dimensions.width, dimensions.length);
@@ -146,9 +151,10 @@ export default function ProfessionalRoomRenderer({
           rx="4"
         />
 
-        {/* Wall lines with better visibility */}
+        {/* Wall lines with better visibility and interactivity */}
         {availableWalls.map((wall, index) => {
           const isActive = activeWall === index;
+          const isPressed = pressedWall === index;
           const x1 = wall.startPoint.x * scaleFactor + offsetX;
           const y1 = wall.startPoint.y * scaleFactor + offsetY;
           const x2 = wall.endPoint.x * scaleFactor + offsetX;
@@ -161,39 +167,23 @@ export default function ProfessionalRoomRenderer({
               y1={y1}
               x2={x2}
               y2={y2}
-              stroke={isActive ? "#8B5CF6" : "#4B5563"}
-              strokeWidth={isActive ? "4" : "2"}
-              opacity={isActive ? 1 : 0.6}
+              stroke={isActive ? "#8B5CF6" : isPressed ? "#A78BFA" : "#4B5563"}
+              strokeWidth={isActive ? "6" : isPressed ? "5" : "2"}
+              opacity={isActive ? 1 : isPressed ? 0.9 : 0.6}
+              onPress={() => onWallSelect(index)}
+              onPressIn={() => setPressedWall(index)}
+              onPressOut={() => setPressedWall(null)}
+              onLongPress={() => onWallLongPress?.(index)}
+              delayLongPress={400}
             />
           );
         })}
-
-        {/* Dimension labels */}
-        <SvgText
-          x={offsetX + width / 2}
-          y={offsetY - 8}
-          textAnchor="middle"
-          fontSize="12"
-          fill="#9CA3AF"
-        >
-          {(dimensions.width / 100).toFixed(2)}m
-        </SvgText>
-        <SvgText
-          x={offsetX - 8}
-          y={offsetY + length / 2}
-          textAnchor="middle"
-          fontSize="12"
-          fill="#9CA3AF"
-          transform={`rotate(-90, ${offsetX - 8}, ${offsetY + length / 2})`}
-        >
-          {(dimensions.length / 100).toFixed(2)}m
-        </SvgText>
 
         {/* Elements */}
         {renderedElements.map((rendered, index) => {
           const { element, x, y } = rendered;
           const elementSize = Math.max(8, element.width * scaleFactor * 0.1);
-          
+
           return (
             <Circle
               key={`element-${index}`}
@@ -207,19 +197,21 @@ export default function ProfessionalRoomRenderer({
           );
         })}
 
-        {/* Wall labels */}
+        {/* Wall labels - Clean and simple */}
         {availableWalls.map((wall, index) => {
+          const isActive = activeWall === index;
+          const isPressed = pressedWall === index;
           const midX = (wall.startPoint.x + wall.endPoint.x) * scaleFactor / 2 + offsetX;
           const midY = (wall.startPoint.y + wall.endPoint.y) * scaleFactor / 2 + offsetY;
-          
+
           return (
             <SvgText
               key={`wall-label-${wall.id}`}
               x={midX}
-              y={midY - 5}
+              y={midY + 3}
               textAnchor="middle"
-              fontSize="10"
-              fill="#6C63FF"
+              fontSize="11"
+              fill={isActive ? "#8B5CF6" : isPressed ? "#A78BFA" : "#9CA3AF"}
               fontWeight="bold"
             >
               {index + 1}
@@ -235,63 +227,102 @@ export default function ProfessionalRoomRenderer({
     const offsetX = 30;
     const offsetY = 30;
 
-    // L-shape path based on corner
-    let pathData = "";
-    
+    // Calculate Y offset for bottom corners when extension is taller
+    let yOffset = 0;
+    if ((corner === "bottom-right" || corner === "bottom-left") && length2 > length) {
+      yOffset = length2 - length;
+    }
+
+    // Define main room and extension rectangles based on corner
+    let mainRoomRect = { x: 0, y: 0, width: 0, height: 0 };
+    let extensionRect = { x: 0, y: 0, width: 0, height: 0 };
+    let mainLabelPos = { x: 0, y: 0 };
+    let extensionLabelPos = { x: 0, y: 0 };
+
     switch (corner) {
       case "top-right":
-        pathData = `M ${offsetX} ${offsetY} 
-                   L ${offsetX + width} ${offsetY} 
-                   L ${offsetX + width + width2} ${offsetY} 
-                   L ${offsetX + width + width2} ${offsetY + length2} 
-                   L ${offsetX + width} ${offsetY + length2} 
-                   L ${offsetX + width} ${offsetY + length} 
-                   L ${offsetX} ${offsetY + length} 
-                   Z`;
+        // Main room on the left
+        mainRoomRect = { x: offsetX, y: offsetY, width: width, height: length };
+        extensionRect = { x: offsetX + width, y: offsetY, width: width2, height: length2 };
+        mainLabelPos = { x: offsetX + width / 2, y: offsetY + length / 2 };
+        extensionLabelPos = { x: offsetX + width + width2 / 2, y: offsetY + length2 / 2 };
         break;
       case "top-left":
-        pathData = `M ${offsetX} ${offsetY} 
-                   L ${offsetX + width2} ${offsetY} 
-                   L ${offsetX + width2 + width} ${offsetY} 
-                   L ${offsetX + width2 + width} ${offsetY + length} 
-                   L ${offsetX + width2} ${offsetY + length} 
-                   L ${offsetX + width2} ${offsetY + length2} 
-                   L ${offsetX} ${offsetY + length2} 
-                   Z`;
+        // Extension on the left, main room on the right
+        extensionRect = { x: offsetX, y: offsetY, width: width2, height: length2 };
+        mainRoomRect = { x: offsetX + width2, y: offsetY, width: width, height: length };
+        extensionLabelPos = { x: offsetX + width2 / 2, y: offsetY + length2 / 2 };
+        mainLabelPos = { x: offsetX + width2 + width / 2, y: offsetY + length / 2 };
         break;
       case "bottom-right":
-        pathData = `M ${offsetX} ${offsetY} 
-                   L ${offsetX + width} ${offsetY} 
-                   L ${offsetX + width} ${offsetY + length - length2} 
-                   L ${offsetX + width + width2} ${offsetY + length - length2} 
-                   L ${offsetX + width + width2} ${offsetY + length} 
-                   L ${offsetX} ${offsetY + length} 
-                   Z`;
+        // Main room at top, extension at bottom-right
+        mainRoomRect = { x: offsetX, y: offsetY + yOffset, width: width, height: length };
+        extensionRect = { x: offsetX + width, y: offsetY + yOffset + length - length2, width: width2, height: length2 };
+        mainLabelPos = { x: offsetX + width / 2, y: offsetY + yOffset + length / 2 };
+        extensionLabelPos = { x: offsetX + width + width2 / 2, y: offsetY + yOffset + length - length2 / 2 };
         break;
       case "bottom-left":
-        pathData = `M ${offsetX + width2} ${offsetY} 
-                   L ${offsetX + width2 + width} ${offsetY} 
-                   L ${offsetX + width2 + width} ${offsetY + length} 
-                   L ${offsetX} ${offsetY + length} 
-                   L ${offsetX} ${offsetY + length - length2} 
-                   L ${offsetX + width2} ${offsetY + length - length2} 
-                   Z`;
+        // Extension at bottom-left, main room at top-right
+        extensionRect = { x: offsetX, y: offsetY + yOffset + length - length2, width: width2, height: length2 };
+        mainRoomRect = { x: offsetX + width2, y: offsetY + yOffset, width: width, height: length };
+        extensionLabelPos = { x: offsetX + width2 / 2, y: offsetY + yOffset + length - length2 / 2 };
+        mainLabelPos = { x: offsetX + width2 + width / 2, y: offsetY + yOffset + length / 2 };
         break;
     }
 
     return (
       <Svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
-        {/* L-shape room */}
-        <Path
-          d={pathData}
-          fill="rgba(108, 99, 255, 0.1)"
+        {/* Main room rectangle - darker purple */}
+        <Rect
+          x={mainRoomRect.x}
+          y={mainRoomRect.y}
+          width={mainRoomRect.width}
+          height={mainRoomRect.height}
+          fill="rgba(108, 99, 255, 0.15)"
           stroke="#6C63FF"
           strokeWidth="2"
         />
 
-        {/* Wall lines */}
+        {/* Extension rectangle - brighter accent color */}
+        <Rect
+          x={extensionRect.x}
+          y={extensionRect.y}
+          width={extensionRect.width}
+          height={extensionRect.height}
+          fill="rgba(139, 92, 246, 0.25)"
+          stroke="#8B5CF6"
+          strokeWidth="2"
+          strokeDasharray="4,2"
+        />
+
+        {/* Main room label */}
+        <SvgText
+          x={mainLabelPos.x}
+          y={mainLabelPos.y}
+          textAnchor="middle"
+          fontSize="11"
+          fill="#6C63FF"
+          fontWeight="bold"
+        >
+          Główne
+        </SvgText>
+
+        {/* Extension label */}
+        <SvgText
+          x={extensionLabelPos.x}
+          y={extensionLabelPos.y}
+          textAnchor="middle"
+          fontSize="11"
+          fill="#8B5CF6"
+          fontWeight="bold"
+        >
+          Rozszerzenie
+        </SvgText>
+
+        {/* Wall lines with interactivity */}
         {availableWalls.map((wall, index) => {
           const isActive = activeWall === index;
+          const isPressed = pressedWall === index;
           const x1 = wall.startPoint.x * scaleFactor + offsetX;
           const y1 = wall.startPoint.y * scaleFactor + offsetY;
           const x2 = wall.endPoint.x * scaleFactor + offsetX;
@@ -304,9 +335,14 @@ export default function ProfessionalRoomRenderer({
               y1={y1}
               x2={x2}
               y2={y2}
-              stroke={isActive ? "#8B5CF6" : "#4B5563"}
-              strokeWidth={isActive ? "4" : "2"}
-              opacity={isActive ? 1 : 0.6}
+              stroke={isActive ? "#8B5CF6" : isPressed ? "#A78BFA" : "#4B5563"}
+              strokeWidth={isActive ? "6" : isPressed ? "5" : "2"}
+              opacity={isActive ? 1 : isPressed ? 0.9 : 0.6}
+              onPress={() => onWallSelect(index)}
+              onPressIn={() => setPressedWall(index)}
+              onPressOut={() => setPressedWall(null)}
+              onLongPress={() => onWallLongPress?.(index)}
+              delayLongPress={400}
             />
           );
         })}
@@ -315,7 +351,7 @@ export default function ProfessionalRoomRenderer({
         {renderedElements.map((rendered, index) => {
           const { element, x, y } = rendered;
           const elementSize = Math.max(8, element.width * scaleFactor * 0.1);
-          
+
           return (
             <Circle
               key={`element-${index}`}
@@ -329,19 +365,21 @@ export default function ProfessionalRoomRenderer({
           );
         })}
 
-        {/* Wall labels */}
+        {/* Wall labels - Clean and simple */}
         {availableWalls.map((wall, index) => {
+          const isActive = activeWall === index;
+          const isPressed = pressedWall === index;
           const midX = (wall.startPoint.x + wall.endPoint.x) * scaleFactor / 2 + offsetX;
           const midY = (wall.startPoint.y + wall.endPoint.y) * scaleFactor / 2 + offsetY;
-          
+
           return (
             <SvgText
               key={`wall-label-${wall.id}`}
               x={midX}
-              y={midY - 5}
+              y={midY + 3}
               textAnchor="middle"
-              fontSize="10"
-              fill="#6C63FF"
+              fontSize="11"
+              fill={isActive ? "#8B5CF6" : isPressed ? "#A78BFA" : "#9CA3AF"}
               fontWeight="bold"
             >
               {index + 1}
@@ -356,13 +394,15 @@ export default function ProfessionalRoomRenderer({
     return (
       <View style={{ marginTop: 16 }}>
         <Text style={{ color: "white", fontSize: 14, marginBottom: 8 }}>
-          Kliknij ścianę aby ją wybrać:
+          Kliknij ścianę aby ją wybrać{onWallLongPress ? " (przytrzymaj aby dodać element)" : ""}:
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {availableWalls.map((wall, index) => (
             <TouchableOpacity
               key={wall.id}
               onPress={() => onWallSelect(index)}
+              onLongPress={() => onWallLongPress?.(index)}
+              delayLongPress={400}
               style={{
                 backgroundColor: activeWall === index ? "#6C63FF" : "#374151",
                 paddingHorizontal: 12,
@@ -451,13 +491,12 @@ export default function ProfessionalRoomRenderer({
         <Text style={{ color: "white", fontSize: 16, fontWeight: "bold", marginBottom: 12 }}>
           Wizualizacja pomieszczenia
         </Text>
-        
+
         <View style={{ alignItems: "center" }}>
           {shape === "rectangle" ? renderRectangleRoom() : renderLShapeRoom()}
         </View>
-        
+
         {renderWallSelectionOverlay()}
-        {renderElementsList()}
       </LinearGradient>
     </View>
   );

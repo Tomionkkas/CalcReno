@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { View, ScrollView, Text, TouchableOpacity, Dimensions, Alert, Animated } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Project, Room } from "../../utils/storage";
@@ -6,15 +6,18 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { getWallsForShape } from "../../utils/shapeCalculations";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import * as MediaLibrary from 'expo-media-library';
 import PlannerHeader from "./components/PlannerHeader";
 import CanvasContainer from "./components/CanvasContainer";
 import CanvasGrid from "./components/CanvasGrid";
 import CanvasLegend from "./components/CanvasLegend";
 import RoomControls from "./components/RoomControls";
 import DraggableRoom from "./DraggableRoom/DraggableRoom";
+import ExportPreviewModal from "./components/ExportPreviewModal";
 import { CanvasRoom, CANVAS_WIDTH, CANVAS_HEIGHT, GRID_SIZE, METERS_TO_GRID } from "./utils/canvasCalculations";
 import { spacing, borderRadius, colors, typography, shadows, animations } from "../../utils/theme";
-import { generateSVG } from "./utils/svgExportUtils";
+import { exportCanvasToPNG, getCanvasFileName } from "./utils/exportUtils";
+import { useToast } from "../../hooks/useToast";
 
 interface ProjectPlannerTabProps {
   project: Project;
@@ -22,16 +25,20 @@ interface ProjectPlannerTabProps {
   onRemoveRoom: (roomId: string) => void;
 }
 
-export default function ProjectPlannerTab({ 
-  project, 
-  onAddRoom, 
-  onRemoveRoom 
+export default function ProjectPlannerTab({
+  project,
+  onAddRoom,
+  onRemoveRoom
 }: ProjectPlannerTabProps) {
   const [canvasRooms, setCanvasRooms] = useState<CanvasRoom[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isCleanMode, setIsCleanMode] = useState(false);
+  const [showExportPreview, setShowExportPreview] = useState(false);
+  const [exportedImageUri, setExportedImageUri] = useState<string | null>(null);
   const emptyStateAnim = React.useRef(new Animated.Value(0)).current;
+  const canvasRef = useRef<View>(null);
+  const { showSuccess, showError } = useToast();
 
   useEffect(() => {
     console.log('🔵 ProjectPlannerTab MOUNTED');
@@ -83,58 +90,128 @@ export default function ProjectPlannerTab({
   const snapToGrid = (value: number) => Math.round(value / GRID_SIZE) * GRID_SIZE;
 
   const getRoomWidth = (room: Room) => {
+    let width: number;
+    let height: number;
+
     if (room.shape === 'l-shape') {
       // For L-shapes, match the SVG width calculation: main width + additional width
       // This ensures consistency between positioning and rendering
-      const mainWidth = Math.max(40, (room.dimensions.width / 100) * METERS_TO_GRID);
-      const additionalWidth = Math.max(20, ((room.dimensions.width2 || 0) / 100) * METERS_TO_GRID);
-      return mainWidth + additionalWidth;
+      const mainWidth = (room.dimensions.width / 100) * METERS_TO_GRID;
+      const additionalWidth = ((room.dimensions.width2 || 0) / 100) * METERS_TO_GRID;
+      width = mainWidth + additionalWidth;
+
+      const mainHeight = (room.dimensions.length / 100) * METERS_TO_GRID;
+      const extHeight = ((room.dimensions.length2 || 0) / 100) * METERS_TO_GRID;
+      height = Math.max(mainHeight, extHeight);
+    } else {
+      width = (room.dimensions.width / 100) * METERS_TO_GRID;
+      height = (room.dimensions.length / 100) * METERS_TO_GRID;
     }
-    return Math.max(40, (room.dimensions.width / 100) * METERS_TO_GRID);
+
+    // Swap dimensions for 90° and 270° rotations
+    const rotation = room.rotation || 0;
+    if (rotation === 90 || rotation === 270) {
+      return height; // Swapped!
+    }
+    return width;
   };
-  const getRoomHeight = (room: Room) => Math.max(30, (room.dimensions.length / 100) * METERS_TO_GRID);
+
+  const getRoomHeight = (room: Room) => {
+    let width: number;
+    let height: number;
+
+    if (room.shape === 'l-shape') {
+      const mainWidth = (room.dimensions.width / 100) * METERS_TO_GRID;
+      const additionalWidth = ((room.dimensions.width2 || 0) / 100) * METERS_TO_GRID;
+      width = mainWidth + additionalWidth;
+
+      const mainHeight = (room.dimensions.length / 100) * METERS_TO_GRID;
+      const extHeight = ((room.dimensions.length2 || 0) / 100) * METERS_TO_GRID;
+      height = Math.max(mainHeight, extHeight);  // Return the LARGER dimension
+    } else {
+      width = (room.dimensions.width / 100) * METERS_TO_GRID;
+      height = (room.dimensions.length / 100) * METERS_TO_GRID;
+    }
+
+    // Swap dimensions for 90° and 270° rotations
+    const rotation = room.rotation || 0;
+    if (rotation === 90 || rotation === 270) {
+      return width; // Swapped!
+    }
+    return height;
+  };
 
   const toggleCleanMode = () => {
     setIsCleanMode(!isCleanMode);
   };
 
-  const exportToSVG = async () => {
-    console.log('🔵 Export button pressed - generating SVG');
-    
+  const exportToPNG = async () => {
+    console.log('🔵 Export button pressed - generating PNG');
+
     if (canvasRooms.length === 0) {
       Alert.alert("Błąd eksportu", "Brak pomieszczeń do wyeksportowania");
       return;
     }
 
     try {
-      // Generate SVG from canvas data
-      const svgContent = generateSVG(canvasRooms, project.name, isCleanMode);
-      
-      // Create file name
-      const fileName = `${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_plan.svg`;
-      const fileUri = (FileSystem.documentDirectory || '') + fileName;
-      
-      // Write SVG to file
-      await FileSystem.writeAsStringAsync(fileUri, svgContent, {
-        encoding: 'utf8',
-      });
+      const uri = await exportCanvasToPNG(canvasRef, project, showError);
 
-      console.log('✅ SVG file created:', fileUri);
-
-      // Share the file
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          UTI: '.svg',
-          mimeType: 'image/svg+xml',
-        });
-      } else {
-        Alert.alert("Sukces", `Plan zapisany w: ${fileUri}`);
+      if (uri) {
+        console.log('✅ PNG captured:', uri);
+        setExportedImageUri(uri);
+        setShowExportPreview(true);
       }
     } catch (error) {
       console.error("❌ Export error:", error);
       const errorMessage = error instanceof Error ? error.message : "Nieznany błąd";
-      Alert.alert("Błąd eksportu", `Nie udało się wyeksportować planu do SVG: ${errorMessage}`);
+      showError("Błąd eksportu", `Nie udało się wyeksportować planu do PNG: ${errorMessage}`);
     }
+  };
+
+  const handleDownload = async () => {
+    if (!exportedImageUri) return;
+
+    try {
+      // Request permissions
+      const permission = await MediaLibrary.requestPermissionsAsync();
+
+      if (!permission.granted) {
+        showError("Błąd", "Wymagane są uprawnienia do biblioteki zdjęć");
+        return;
+      }
+
+      // Save to photo gallery
+      await MediaLibrary.saveToLibraryAsync(exportedImageUri);
+
+      showSuccess("Sukces", "Plan zapisany w bibliotece zdjęć");
+      setShowExportPreview(false);
+    } catch (error) {
+      console.error("Download error:", error);
+      showError("Błąd", "Nie udało się zapisać pliku");
+    }
+  };
+
+  const handleShare = async () => {
+    if (!exportedImageUri) return;
+
+    try {
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(exportedImageUri, {
+          UTI: '.png',
+          mimeType: 'image/png',
+        });
+        setShowExportPreview(false);
+      } else {
+        showError("Błąd", "Udostępnianie nie jest dostępne na tym urządzeniu");
+      }
+    } catch (error) {
+      showError("Błąd", "Nie udało się udostępnić pliku");
+    }
+  };
+
+  const handleClosePreview = () => {
+    setShowExportPreview(false);
+    setExportedImageUri(null);
   };
 
   const handleSelectRoom = (roomId: string) => {
@@ -155,6 +232,19 @@ export default function ProjectPlannerTab({
     setIsDragging(false);
   };
 
+  const handleRotateRoom = (roomId: string) => {
+    setCanvasRooms(prev =>
+      prev.map(room => {
+        if (room.id === roomId) {
+          const currentRotation = room.rotation || 0;
+          const newRotation = (currentRotation + 90) % 360 as 0 | 90 | 180 | 270;
+          return { ...room, rotation: newRotation };
+        }
+        return room;
+      })
+    );
+  };
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ScrollView 
@@ -164,8 +254,8 @@ export default function ProjectPlannerTab({
         contentContainerStyle={{ paddingBottom: spacing.xl }}
       >
         {/* Header */}
-        <PlannerHeader 
-          onExport={exportToSVG}
+        <PlannerHeader
+          onExport={exportToPNG}
           hasRooms={canvasRooms.length > 0}
           isCleanMode={isCleanMode}
           onToggleCleanMode={toggleCleanMode}
@@ -173,6 +263,7 @@ export default function ProjectPlannerTab({
           {/* Canvas */}
           <View style={{ alignItems: 'center', marginVertical: spacing.lg }}>
             <View
+              ref={canvasRef}
               style={{
                 backgroundColor: isCleanMode ? "#FFFFFF" : "#0A0B1E",
                 borderRadius: borderRadius.lg,
@@ -300,6 +391,7 @@ export default function ProjectPlannerTab({
                         onSelect={handleSelectRoom}
                         onMove={handleMoveRoom}
                         onRemove={handleRemoveRoom}
+                        onRotate={handleRotateRoom}
                         existingRooms={canvasRooms}
                         setIsDragging={setIsDragging}
                         snapToGrid={snapToGrid}
@@ -348,6 +440,16 @@ export default function ProjectPlannerTab({
           isCleanMode={isCleanMode}
         />
       </ScrollView>
+
+      {/* Export Preview Modal */}
+      <ExportPreviewModal
+        visible={showExportPreview}
+        imageUri={exportedImageUri}
+        projectName={project.name}
+        onClose={handleClosePreview}
+        onDownload={handleDownload}
+        onShare={handleShare}
+      />
     </GestureHandlerRootView>
   );
 }

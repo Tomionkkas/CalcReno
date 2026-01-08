@@ -11,8 +11,11 @@ const DimensionsInput: React.FC<DimensionsInputProps> = ({
 }) => {
   return (
     <View style={{ marginBottom: 24 }}>
-      <Text style={{ fontSize: 18, color: "white", marginBottom: 8 }}>
-        Wymiary (m)
+      <Text style={{ fontSize: 18, color: "white", marginBottom: 4 }}>
+        Wymiary głównego pomieszczenia (m)
+      </Text>
+      <Text style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 12 }}>
+        To jest główna prostokątna część pomieszczenia
       </Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
         <View

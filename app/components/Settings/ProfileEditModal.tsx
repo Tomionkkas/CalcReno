@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { X, User } from 'lucide-react-native';
-import { supabase } from '../../utils/supabase';
+import { sharedSupabase } from '../../utils/supabase';
 import { useAuth } from '../../hooks/useAuth';
 
 interface ProfileEditModalProps {
@@ -55,8 +55,8 @@ export function ProfileEditModal({ visible, onClose, onSuccess }: ProfileEditMod
     setLoading(true);
 
     try {
-      const { error } = await supabase
-        .from('user_profiles')
+      const { error } = await sharedSupabase
+        .from('profiles')
         .update({
           first_name: trimmedFirstName,
           last_name: trimmedLastName,

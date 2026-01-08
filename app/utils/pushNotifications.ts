@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform, Linking } from 'react-native';
-import { supabase } from './supabase';
+import { supabase, sharedSupabase } from './supabase';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -80,23 +80,49 @@ export class PushNotificationService {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Store in user_profiles table with push_token field for now
-      // We'll create the user_push_tokens table later in migration
-      const { error } = await supabase
-        .from('user_profiles')
-        .upsert({
-          user_id: user.id,
-          push_token: token,
-          platform: Platform.OS,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id'
-        });
+      // Check if token already exists for this user and app
+      const { data: existingTokens } = await sharedSupabase
+        .from('user_push_tokens')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('app_name', 'CalcReno')
+        .eq('push_token', token)
+        .limit(1);
 
-      if (error) {
-        console.error('Error saving push token:', error);
+      if (existingTokens && existingTokens.length > 0) {
+        // Token already exists, just update the timestamp
+        const { error } = await sharedSupabase
+          .from('user_push_tokens')
+          .update({
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingTokens[0].id);
+
+        if (error) {
+          console.error('Error updating push token:', error);
+        } else {
+          console.log('Push token updated successfully');
+        }
       } else {
-        console.log('Push token saved successfully');
+        // New token, insert it
+        const { error } = await sharedSupabase
+          .from('user_push_tokens')
+          .insert({
+            user_id: user.id,
+            app_name: 'CalcReno',
+            push_token: token,
+            device_type: Platform.OS,
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
+        if (error) {
+          console.error('Error saving push token:', error);
+        } else {
+          console.log('Push token saved successfully');
+        }
       }
     } catch (error) {
       console.error('Error in savePushTokenToDatabase:', error);

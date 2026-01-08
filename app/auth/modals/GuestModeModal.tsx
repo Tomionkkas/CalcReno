@@ -115,7 +115,7 @@ export function GuestModeModal({
                 colors={['rgba(108, 99, 255, 0.8)', 'rgba(139, 92, 246, 0.8)', 'rgba(168, 85, 247, 0.8)']}
                 style={styles.continueButtonGradient}
               >
-                <Text style={styles.continueButtonText}>
+                <Text style={styles.continueButtonText} numberOfLines={1}>
                   Kontynuuj offline
                 </Text>
               </LinearGradient>
@@ -262,21 +262,22 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 12,
   },
   cancelButton: {
-    flex: 1,
     backgroundColor: 'rgba(55, 65, 81, 0.6)',
     paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(184, 188, 200, 0.2)',
+    minWidth: 90,
   },
   cancelButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
   continueButton: {
@@ -291,12 +292,14 @@ const styles = StyleSheet.create({
   },
   continueButtonGradient: {
     paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   continueButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
+    textAlign: 'center',
   },
 });

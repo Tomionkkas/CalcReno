@@ -13,6 +13,7 @@ interface DraggableRoomProps {
   onSelect: (roomId: string) => void;
   onMove: (roomId: string, position: { x: number; y: number }) => void;
   onRemove: (roomId: string) => void;
+  onRotate: (roomId: string) => void;
   existingRooms: CanvasRoom[];
   setIsDragging: (isDragging: boolean) => void;
   snapToGrid: (value: number) => number;
@@ -27,6 +28,7 @@ export default function DraggableRoom({
   onSelect,
   onMove,
   onRemove,
+  onRotate,
   existingRooms,
   setIsDragging,
   snapToGrid,
@@ -105,18 +107,23 @@ export default function DraggableRoom({
   }, [isSelected]);
 
   // Animated style for smooth position updates
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-    ],
-    opacity: isDragging.value ? 0.8 : 1,
-    zIndex: isSelectedShared.value ? 1000 : 1,
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    const rotation = room.rotation || 0;
+    return {
+      transform: [
+        { translateX: translateX.value },
+        { translateY: translateY.value },
+        { rotate: `${rotation}deg` },
+      ],
+      opacity: isDragging.value ? 0.8 : 1,
+      zIndex: isSelectedShared.value ? 1000 : 1,
+    };
+  });
 
   const renderRoomShape = () => {
     const width = getRoomWidth(room);
     const height = getRoomHeight(room);
+    const rotation = room.rotation || 0;
 
     if (room.shape === "rectangle") {
       return (
@@ -124,11 +131,11 @@ export default function DraggableRoom({
           style={{
             width: width,
             height: height,
-            backgroundColor: isCleanMode 
+            backgroundColor: isCleanMode
               ? (isSelected ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.08)")
               : (isSelected ? "rgba(108, 99, 255, 0.6)" : "rgba(108, 99, 255, 0.4)"),
             borderWidth: isSelected ? 3 : 2,
-            borderColor: isCleanMode 
+            borderColor: isCleanMode
               ? (isSelected ? "#3B82F6" : "#6B7280")
               : (isSelected ? "#8B5CF6" : "#6C63FF"),
             shadowColor: isCleanMode ? "#000000" : "#000",
@@ -142,30 +149,33 @@ export default function DraggableRoom({
             position: "relative",
           }}
         >
-          <Text style={{ 
-            color: isCleanMode ? "#000000" : "white", 
-            fontSize: 10, 
-            fontWeight: '600',
-            textAlign: "center",
-            marginBottom: 2,
-            fontFamily: typography.fonts.primary,
-            letterSpacing: 0.1,
-            textShadowColor: isCleanMode ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.3)',
-            textShadowOffset: { width: 0, height: 1 },
-            textShadowRadius: 1,
-          }}>
-            {room.name}
-          </Text>
-          <Text style={{ 
-            color: isCleanMode ? "#6B7280" : "#B8BCC8", 
-            fontSize: 8, 
-            textAlign: "center",
-            fontWeight: '500',
-            fontFamily: typography.fonts.primary,
-            letterSpacing: 0.05,
-          }}>
-            {(room.dimensions.width / 100).toFixed(1)}m × {(room.dimensions.length / 100).toFixed(1)}m
-          </Text>
+          {/* Counter-rotate text to keep it upright */}
+          <View style={{ transform: [{ rotate: `${-rotation}deg` }] }}>
+            <Text style={{
+              color: isCleanMode ? "#000000" : "white",
+              fontSize: 10,
+              fontWeight: '600',
+              textAlign: "center",
+              marginBottom: 2,
+              fontFamily: typography.fonts.primary,
+              letterSpacing: 0.1,
+              textShadowColor: isCleanMode ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.3)',
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 1,
+            }}>
+              {room.name}
+            </Text>
+            <Text style={{
+              color: isCleanMode ? "#6B7280" : "#B8BCC8",
+              fontSize: 8,
+              textAlign: "center",
+              fontWeight: '500',
+              fontFamily: typography.fonts.primary,
+              letterSpacing: 0.05,
+            }}>
+              {(room.dimensions.width / 100).toFixed(1)}m × {(room.dimensions.length / 100).toFixed(1)}m
+            </Text>
+          </View>
           
           {/* Render doors and windows as small colored indicators */}
           {room.elements?.map((element, index) => {
@@ -232,49 +242,103 @@ export default function DraggableRoom({
       const { width: roomWidth, length: roomLength, width2: roomWidth2 = 0, length2: roomLength2 = 0 } = room.dimensions;
       
       // Convert dimensions from cm to grid units (1m = 20px) - use raw dimensions to avoid double calculation
-      const mainWidth = Math.max(40, (roomWidth / 100) * METERS_TO_GRID);
-      const height = getRoomHeight(room);
-      const width2 = Math.max(20, (roomWidth2 / 100) * METERS_TO_GRID);
+      const mainWidth = (roomWidth / 100) * METERS_TO_GRID;
+      const height = (roomLength / 100) * METERS_TO_GRID;  // Use direct calculation instead of getRoomHeight
+      const width2 = (roomWidth2 / 100) * METERS_TO_GRID;
       const length2 = (roomLength2 / 100) * METERS_TO_GRID;
-      
+
+      // Get corner orientation first
+      const corner = room.corner || "top-right";
+
+      // Calculate actual SVG dimensions based on corner orientation
+      let svgWidth: number;
+      let svgHeight: number;
+
+      switch (corner) {
+        case "top-right":
+        case "bottom-right":
+          svgWidth = mainWidth + width2;           // Extension extends RIGHT
+          svgHeight = Math.max(height, length2);   // Extension may be taller/deeper
+          break;
+        case "top-left":
+        case "bottom-left":
+          svgWidth = mainWidth + width2;           // Extension extends LEFT
+          svgHeight = Math.max(height, length2);   // Extension may be taller/deeper
+          break;
+        default:
+          svgWidth = mainWidth + width2;
+          svgHeight = Math.max(height, length2);
+      }
+
       // Generate SVG path based on corner orientation
       let pathData = "";
-      const corner = room.corner || "top-right";
       
       switch (corner) {
         case "top-right":
-          pathData = `M 0 0 L ${mainWidth} 0 L ${mainWidth + width2} 0 L ${mainWidth + width2} ${length2} L ${mainWidth} ${length2} L ${mainWidth} ${height} L 0 ${height} Z`;
+          if (length2 > height) {
+            // Extension is taller - main room is shifted down
+            const mainTop = length2 - height;
+            pathData = `M 0 ${mainTop} L ${mainWidth} ${mainTop} L ${mainWidth} 0 L ${mainWidth + width2} 0 L ${mainWidth + width2} ${length2} L ${mainWidth} ${length2} L ${mainWidth} ${length2} L 0 ${length2} Z`;
+          } else {
+            // Main is taller - normal case
+            pathData = `M 0 0 L ${mainWidth} 0 L ${mainWidth + width2} 0 L ${mainWidth + width2} ${length2} L ${mainWidth} ${length2} L ${mainWidth} ${height} L 0 ${height} Z`;
+          }
           break;
         case "top-left":
-          pathData = `M 0 0 L ${width2} 0 L ${width2 + mainWidth} 0 L ${width2 + mainWidth} ${height} L ${width2} ${height} L ${width2} ${length2} L 0 ${length2} Z`;
+          if (length2 > height) {
+            // Extension is taller - main room is shifted down
+            const mainTop = length2 - height;
+            pathData = `M 0 0 L ${width2} 0 L ${width2} ${length2} L ${width2 + mainWidth} ${length2} L ${width2 + mainWidth} ${mainTop} L ${width2} ${mainTop} L ${width2} ${length2} L 0 ${length2} Z`;
+          } else {
+            // Main is taller - normal case
+            pathData = `M 0 0 L ${width2} 0 L ${width2 + mainWidth} 0 L ${width2 + mainWidth} ${height} L ${width2} ${height} L ${width2} ${length2} L 0 ${length2} Z`;
+          }
           break;
         case "bottom-right":
-          pathData = `M 0 0 L ${mainWidth} 0 L ${mainWidth} ${height - length2} L ${mainWidth + width2} ${height - length2} L ${mainWidth + width2} ${height} L 0 ${height} Z`;
+          if (length2 > height) {
+            // Extension taller - apply Y offset to maintain visual orientation
+            const yOffset = length2 - height;
+            pathData = `M 0 ${yOffset} L ${mainWidth} ${yOffset} L ${mainWidth} 0 L ${mainWidth + width2} 0 L ${mainWidth + width2} ${length2} L ${mainWidth} ${length2} L 0 ${length2} Z`;
+          } else {
+            // Main taller - standard case
+            pathData = `M 0 0 L ${mainWidth} 0 L ${mainWidth} ${height - length2} L ${mainWidth + width2} ${height - length2} L ${mainWidth + width2} ${height} L ${mainWidth} ${height} L 0 ${height} Z`;
+          }
           break;
         case "bottom-left":
-          pathData = `M ${width2} 0 L ${width2 + mainWidth} 0 L ${width2 + mainWidth} ${height} L 0 ${height} L 0 ${height - length2} L ${width2} ${height - length2} Z`;
+          if (length2 > height) {
+            // Extension taller - apply Y offset
+            const yOffset = length2 - height;
+            pathData = `M 0 0 L ${width2} 0 L ${width2} ${length2} L ${width2 + mainWidth} ${length2} L ${width2 + mainWidth} ${yOffset} L ${width2} ${yOffset} L 0 ${length2} Z`;
+          } else {
+            // Main taller - standard case
+            pathData = `M ${width2} 0 L ${width2 + mainWidth} 0 L ${width2 + mainWidth} ${height} L 0 ${height} L 0 ${height - length2} L ${width2} ${height - length2} Z`;
+          }
           break;
       }
 
       // Calculate center of the entire L-shape bounding box for proper text centering
-      const totalWidth = mainWidth + width2;
+      const totalWidth = svgWidth;
       const centerX = totalWidth / 2;
-      const centerY = height / 2;
+      const centerY = svgHeight / 2;
 
       return (
-        <Svg width={mainWidth + width2} height={height}>
+        <Svg
+          width={svgWidth}
+          height={svgHeight}
+          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+        >
           {/* L-shape outline path - dynamic based on corner */}
           <Path
             d={pathData}
-            fill="none"
-            stroke={isCleanMode 
+            fill={isCleanMode ? "rgba(229, 231, 235, 0.5)" : "rgba(108, 99, 255, 0.1)"}
+            stroke={isCleanMode
               ? (isSelected ? "#3B82F6" : "#6B7280")
               : (isSelected ? "#8B5CF6" : "#6C63FF")
             }
             strokeWidth={isSelected ? 3 : 2}
           />
-          
-          {/* Room name - centered on the entire L-shape */}
+
+          {/* Room name - centered on the entire L-shape with counter-rotation */}
           <SvgText
             x={centerX}
             y={centerY - 6}
@@ -282,17 +346,19 @@ export default function DraggableRoom({
             fontWeight="600"
             fill={isCleanMode ? "#000000" : "white"}
             textAnchor="middle"
+            transform={`rotate(${-rotation}, ${centerX}, ${centerY - 6})`}
           >
             {room.name}
           </SvgText>
-          
-          {/* Dimensions */}
+
+          {/* Dimensions with counter-rotation */}
           <SvgText
             x={centerX}
             y={centerY + 6}
             fontSize="8"
             fill={isCleanMode ? "#6B7280" : "#B8BCC8"}
             textAnchor="middle"
+            transform={`rotate(${-rotation}, ${centerX}, ${centerY + 6})`}
           >
             L-shape
           </SvgText>
@@ -324,8 +390,8 @@ export default function DraggableRoom({
 
             // Ensure element stays within SVG boundaries
             const elementRadius = 4;
-            elementX = Math.max(elementRadius, Math.min(elementX, mainWidth + width2 - elementRadius));
-            elementY = Math.max(elementRadius, Math.min(elementY, height - elementRadius));
+            elementX = Math.max(elementRadius, Math.min(elementX, svgWidth - elementRadius));
+            elementY = Math.max(elementRadius, Math.min(elementY, svgHeight - elementRadius));
 
             return (
               <Circle
@@ -354,6 +420,7 @@ export default function DraggableRoom({
             top: 0,
             width: getRoomWidth(room),
             height: getRoomHeight(room),
+            overflow: "visible",
           },
           animatedStyle,
         ]}
@@ -373,7 +440,43 @@ export default function DraggableRoom({
         />
         
         {renderRoomShape()}
-        
+
+        {/* Rotate button - shown when selected and not in clean mode */}
+        {!isCleanMode && isSelected && (
+          <TouchableOpacity
+            onPress={() => onRotate(room.id)}
+            style={{
+              position: "absolute",
+              top: -8,
+              right: 24,
+              backgroundColor: "#3B82F6",
+              borderRadius: 12,
+              width: 20,
+              height: 20,
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 10,
+              shadowColor: "#000000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 4,
+              borderWidth: 1,
+              borderColor: "#2563EB",
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={{
+              color: "white",
+              fontSize: 10,
+              fontWeight: '700',
+              lineHeight: 10,
+            }}>
+              ↻
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* Remove button - hidden in clean mode */}
         {!isCleanMode && (
           <TouchableOpacity
@@ -399,9 +502,9 @@ export default function DraggableRoom({
             }}
             activeOpacity={0.8}
           >
-            <Text style={{ 
-              color: "white", 
-              fontSize: 12, 
+            <Text style={{
+              color: "white",
+              fontSize: 12,
               fontWeight: '600',
               lineHeight: 12,
             }}>

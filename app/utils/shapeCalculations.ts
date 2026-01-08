@@ -98,7 +98,7 @@ export function getLShapeWalls(
         {
           id: 3,
           name: "Ściana 4",
-          length: length - length2,
+          length: Math.abs(length - length2),
           startPoint: { x: width, y: length2 },
           endPoint: { x: width, y: length },
           direction: 'vertical'
@@ -150,7 +150,7 @@ export function getLShapeWalls(
         {
           id: 3,
           name: "Ściana 4",
-          length: length - length2,
+          length: Math.abs(length - length2),
           startPoint: { x: width2, y: length },
           endPoint: { x: width2, y: length2 },
           direction: 'vertical'
@@ -173,109 +173,116 @@ export function getLShapeWalls(
         }
       ];
       
-    case "bottom-right":
+    case "bottom-right": {
+      // Calculate Y offset if extension is taller
+      const yOffset = length2 > length ? length2 - length : 0;
+
       return [
         {
           id: 0,
           name: "Ściana 1",
           length: width,
-          startPoint: { x: 0, y: 0 },
-          endPoint: { x: width, y: 0 },
+          startPoint: { x: 0, y: yOffset },
+          endPoint: { x: width, y: yOffset },
           direction: 'horizontal'
         },
         {
           id: 1,
           name: "Ściana 2",
-          length: length - length2,
-          startPoint: { x: width, y: 0 },
-          endPoint: { x: width, y: length - length2 },
+          length: Math.abs(length - length2),
+          startPoint: { x: width, y: yOffset },
+          endPoint: { x: width, y: Math.max(yOffset + length - length2, 0) },
           direction: 'vertical'
         },
         {
           id: 2,
           name: "Ściana 3",
           length: width2,
-          startPoint: { x: width, y: length - length2 },
-          endPoint: { x: width + width2, y: length - length2 },
+          startPoint: { x: width, y: Math.max(yOffset + length - length2, 0) },
+          endPoint: { x: width + width2, y: Math.max(yOffset + length - length2, 0) },
           direction: 'horizontal'
         },
         {
           id: 3,
           name: "Ściana 4",
           length: length2,
-          startPoint: { x: width + width2, y: length - length2 },
-          endPoint: { x: width + width2, y: length },
+          startPoint: { x: width + width2, y: Math.max(yOffset + length - length2, 0) },
+          endPoint: { x: width + width2, y: yOffset + length },
           direction: 'vertical'
         },
         {
           id: 4,
           name: "Ściana 5",
           length: width + width2,
-          startPoint: { x: width + width2, y: length },
-          endPoint: { x: 0, y: length },
+          startPoint: { x: width + width2, y: yOffset + length },
+          endPoint: { x: 0, y: yOffset + length },
           direction: 'horizontal'
         },
         {
           id: 5,
           name: "Ściana 6",
-          length: length,
-          startPoint: { x: 0, y: length },
+          length: yOffset + length,
+          startPoint: { x: 0, y: yOffset + length },
           endPoint: { x: 0, y: 0 },
           direction: 'vertical'
         }
       ];
+    }
       
-    case "bottom-left":
+    case "bottom-left": {
+      const yOffset = length2 > length ? length2 - length : 0;
+
       return [
         {
           id: 0,
           name: "Ściana 1",
           length: width,
-          startPoint: { x: width2, y: 0 },
-          endPoint: { x: width2 + width, y: 0 },
+          startPoint: { x: width2, y: yOffset },
+          endPoint: { x: width2 + width, y: yOffset },
           direction: 'horizontal'
         },
         {
           id: 1,
           name: "Ściana 2",
-          length: length,
-          startPoint: { x: width2 + width, y: 0 },
-          endPoint: { x: width2 + width, y: length },
+          length: yOffset + length,
+          startPoint: { x: width2 + width, y: yOffset },
+          endPoint: { x: width2 + width, y: yOffset + length },
           direction: 'vertical'
         },
         {
           id: 2,
           name: "Ściana 3",
           length: width2 + width,
-          startPoint: { x: width2 + width, y: length },
-          endPoint: { x: 0, y: length },
+          startPoint: { x: width2 + width, y: yOffset + length },
+          endPoint: { x: 0, y: yOffset + length },
           direction: 'horizontal'
         },
         {
           id: 3,
           name: "Ściana 4",
           length: length2,
-          startPoint: { x: 0, y: length },
-          endPoint: { x: 0, y: length - length2 },
+          startPoint: { x: 0, y: yOffset + length },
+          endPoint: { x: 0, y: Math.max(yOffset + length - length2, 0) },
           direction: 'vertical'
         },
         {
           id: 4,
           name: "Ściana 5",
           length: width2,
-          startPoint: { x: 0, y: length - length2 },
-          endPoint: { x: width2, y: length - length2 },
+          startPoint: { x: 0, y: Math.max(yOffset + length - length2, 0) },
+          endPoint: { x: width2, y: Math.max(yOffset + length - length2, 0) },
           direction: 'horizontal'
         },
         {
           id: 5,
           name: "Ściana 6",
-          length: length - length2,
-          startPoint: { x: width2, y: length - length2 },
-          endPoint: { x: width2, y: 0 },
+          length: Math.abs(length - length2),
+          startPoint: { x: width2, y: Math.max(yOffset + length - length2, 0) },
+          endPoint: { x: width2, y: yOffset },
           direction: 'vertical'
         }
       ];
+    }
   }
 }
 

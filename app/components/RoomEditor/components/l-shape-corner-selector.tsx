@@ -12,8 +12,11 @@ const LShapeCornerSelector: React.FC<LShapeCornerSelectorProps> = ({
   return (
     <View style={{ marginBottom: 24 }}>
       <View style={{ marginTop: 16 }}>
-        <Text style={{ color: "white", marginBottom: 8 }}>
-          Pozycja drugiej części
+        <Text style={{ color: "white", marginBottom: 4, fontSize: 16 }}>
+          Gdzie jest rozszerzenie?
+        </Text>
+        <Text style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 12 }}>
+          Wybierz, w którym rogu znajduje się rozszerzenie typu L
         </Text>
         <View
           style={{
@@ -50,8 +53,11 @@ const LShapeCornerSelector: React.FC<LShapeCornerSelectorProps> = ({
           ))}
         </View>
 
-        <Text style={{ color: "white", marginBottom: 8 }}>
-          Wymiary drugiej części (m)
+        <Text style={{ color: "white", marginBottom: 4, fontSize: 16 }}>
+          Wymiary rozszerzenia (L-część)
+        </Text>
+        <Text style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 12 }}>
+          To jest dodatkowa część tworząca kształt litery L
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           <View

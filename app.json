@@ -10,14 +10,21 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.tomionkka.calcreno"
+      "bundleIdentifier": "com.tomionkka.calcreno",
+      "infoPlist": {
+        "NSPhotoLibraryAddUsageDescription": "CalcReno potrzebuje dostępu do biblioteki zdjęć, aby zapisać wyeksportowany plan."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.tomionkka.calcreno"
+      "package": "com.tomionkka.calcreno",
+      "permissions": [
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -50,7 +57,28 @@
     },
     "extra": {
       "supabaseUrl": "https://kralcmyhjvoiywcpntkg.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyYWxjbXloZnZvaXl3Y3BudGtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkxNjU5NTMsImV4cCI6MjA2NDc0MTk1M30.vSzEoJ1e3IKRPvDfq5vbGjLU7MhMJnX5Q9gMJqN8N5k"
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyYWxjbXloanZvaXl3Y3BudGtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4NzM3OTAsImV4cCI6MjA3MTQ0OTc5MH0.10JbU5SR2bwJyGorKifCVqCqQcnbBR4xup7NnYxz3AE",
+      "router": {},
+      "eas": {
+        "projectId": "7349e32f-de0e-48dd-8c6a-a6c304b44404",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "RenoTimelineWidgetExtension",
+                  "bundleIdentifier": "com.tomionkka.calcreno.RenoTimelineWidget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.tomionkka.calcreno.shared"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
     }
   }
 }

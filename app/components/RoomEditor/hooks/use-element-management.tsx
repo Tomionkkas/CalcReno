@@ -14,11 +14,14 @@ export const useElementManagement = ({ availableWalls, initialElements }: UseEle
   
   // Element state
   const [elements, setElements] = useState<Element[]>(initialElements || []);
-  
+
   // Modal state
   const [showElementModal, setShowElementModal] = useState(false);
   const [isModalInitializing, setIsModalInitializing] = useState(false);
   const [elementType, setElementType] = useState<ElementType>("door");
+
+  // Edit state
+  const [editingElement, setEditingElement] = useState<Element | null>(null);
 
   // Android-specific state to force re-renders
   const [androidForceUpdate, setAndroidForceUpdate] = useState(0);
@@ -28,6 +31,7 @@ export const useElementManagement = ({ availableWalls, initialElements }: UseEle
     setShowElementModal(false);
     setIsModalInitializing(false);
     setElementType("door");
+    setEditingElement(null);
   };
 
   const addElement = (type: ElementType) => {
@@ -62,25 +66,70 @@ export const useElementManagement = ({ availableWalls, initialElements }: UseEle
     }
   };
 
+  const editElement = (element: Element) => {
+    try {
+      // Prevent multiple modal opens
+      if (isModalInitializing || showElementModal) {
+        return;
+      }
+
+      setIsModalInitializing(true);
+
+      // Check if we have valid walls
+      if (!availableWalls || availableWalls.length === 0) {
+        showError("Błąd", "Nie można edytować elementu - brak dostępnych ścian");
+        setIsModalInitializing(false);
+        return;
+      }
+
+      // Set editing state
+      setEditingElement(element);
+      setElementType(element.type);
+
+      // Small delay to ensure state is set before showing modal
+      setTimeout(() => {
+        setShowElementModal(true);
+        setIsModalInitializing(false);
+      }, 100);
+
+    } catch (error) {
+      console.error("Error opening edit modal:", error);
+      showError("Błąd", "Nie można otworzyć okna edycji elementu");
+      setIsModalInitializing(false);
+    }
+  };
+
   const handleSaveElement = (elementData: Omit<Element, "id">) => {
     try {
-      const newElement: Element = {
-        id: generateUUID(),
-        ...elementData,
-      };
+      let updatedElements: Element[];
 
-      const updatedElements = [...elements, newElement];
+      if (editingElement) {
+        // Update existing element
+        updatedElements = elements.map(el =>
+          el.id === editingElement.id
+            ? { ...el, ...elementData }
+            : el
+        );
+      } else {
+        // Add new element
+        const newElement: Element = {
+          id: generateUUID(),
+          ...elementData,
+        };
+        updatedElements = [...elements, newElement];
+      }
+
       setElements(updatedElements);
-      
+
       // Android-specific: Force re-render after state update
       if (Platform.OS === 'android') {
         setTimeout(() => {
           setAndroidForceUpdate(prev => prev + 1);
         }, 50);
       }
-      
+
       resetModalState();
-      
+
     } catch (error) {
       console.error("Error saving element:", error);
       showError("Błąd", "Nie można zapisać elementu");
@@ -165,6 +214,8 @@ export const useElementManagement = ({ availableWalls, initialElements }: UseEle
     elementType,
     setElementType,
     addElement,
+    editElement,
+    editingElement,
     handleSaveElement,
     handleCloseModal,
     removeElement,

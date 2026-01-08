@@ -75,6 +75,7 @@ export interface ElementActionsProps {
   availableWalls: any[];
   activeWall: number | null;
   onWallSelect: (wallIndex: number) => void;
+  onWallLongPress?: (wallIndex: number) => void;
   elements: Element[];
   onElementRemove: (id: string) => void;
   roomShape: RoomShape;
@@ -86,6 +87,7 @@ export interface ElementsListProps {
   elements: Element[];
   availableWalls: any[];
   onElementRemove: (id: string) => void;
+  onElementEdit: (element: Element) => void;
 }
 
 export interface SaveButtonProps {

@@ -1,11 +1,14 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  TouchableOpacity,
 } from "react-native";
+import { DoorOpen, Square, X } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useRoomEditor } from "./hooks/use-room-editor";
@@ -33,6 +36,10 @@ import {
 
 const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
   const { toastConfig, isVisible, showError, hideToast } = useToast();
+
+  // State for element type picker (shown on wall long press)
+  const [showElementPicker, setShowElementPicker] = useState(false);
+  const [longPressedWall, setLongPressedWall] = useState<number | null>(null);
   
   const {
     roomName,
@@ -62,6 +69,8 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
     elementType,
     setElementType,
     addElement,
+    editElement,
+    editingElement,
     handleSaveElement,
     handleCloseModal,
     removeElement,
@@ -71,7 +80,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
   const handleSave = useCallback(() => {
     // Validate dimensions first
     handleSaveBase();
-    
+
     // If validation passes, save with elements
     if (onSave) {
       onSave({
@@ -83,6 +92,29 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
       });
     }
   }, [handleSaveBase, onSave, roomShape, dimensions, elements, roomName, lShapeCorner]);
+
+  // Handle long press on wall - show element type picker
+  const handleWallLongPress = useCallback((wallIndex: number) => {
+    setActiveWall(wallIndex);
+    setLongPressedWall(wallIndex);
+    setShowElementPicker(true);
+  }, [setActiveWall]);
+
+  // Handle element type selection from picker
+  const handleElementTypeSelect = useCallback((type: "door" | "window") => {
+    setShowElementPicker(false);
+    if (longPressedWall !== null) {
+      setActiveWall(longPressedWall);
+      addElement(type);
+    }
+    setLongPressedWall(null);
+  }, [longPressedWall, setActiveWall, addElement]);
+
+  // Close the element picker
+  const handleCloseElementPicker = useCallback(() => {
+    setShowElementPicker(false);
+    setLongPressedWall(null);
+  }, []);
 
   const headerContainerStyle = useMemo(() => ({
     paddingTop: spacing.xl,
@@ -215,6 +247,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
                 availableWalls={availableWalls}
                 activeWall={activeWall}
                 onWallSelect={setActiveWall}
+                onWallLongPress={handleWallLongPress}
                 elements={elements}
                 onElementRemove={removeElement}
                 roomShape={roomShape}
@@ -226,6 +259,7 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
                 elements={elements}
                 availableWalls={availableWalls}
                 onElementRemove={removeElement}
+                onElementEdit={editElement}
               />
 
               <SaveButton onSave={handleSave} />
@@ -233,15 +267,127 @@ const RoomEditor: React.FC<RoomEditorProps> = ({ onSave, initialData }) => {
           </LinearGradient>
         </KeyboardAvoidingView>
 
+        {/* Element Type Picker Modal (shown on wall long press) */}
+        <Modal
+          visible={showElementPicker}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={handleCloseElementPicker}
+        >
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+            activeOpacity={1}
+            onPress={handleCloseElementPicker}
+          >
+            <View
+              style={{
+                backgroundColor: colors.background.card,
+                borderRadius: borderRadius.xl,
+                padding: spacing.lg,
+                width: '80%',
+                maxWidth: 300,
+                ...shadows.lg,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+                <Text style={{ color: colors.text.primary, fontSize: typography.sizes.lg, fontWeight: typography.weights.bold as any }}>
+                  Dodaj element
+                </Text>
+                <TouchableOpacity onPress={handleCloseElementPicker} style={{ padding: spacing.xs }}>
+                  <X size={20} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ color: colors.text.secondary, fontSize: typography.sizes.sm, marginBottom: spacing.lg }}>
+                Ściana {longPressedWall !== null ? longPressedWall + 1 : ''} - wybierz typ elementu:
+              </Text>
+
+              <TouchableOpacity
+                onPress={() => handleElementTypeSelect("door")}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: colors.background.tertiary,
+                  padding: spacing.md,
+                  borderRadius: borderRadius.lg,
+                  marginBottom: spacing.sm,
+                }}
+              >
+                <LinearGradient
+                  colors={["#F59E0B", "#D97706"]}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: borderRadius.md,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: spacing.md,
+                  }}
+                >
+                  <DoorOpen size={22} color="white" />
+                </LinearGradient>
+                <View>
+                  <Text style={{ color: colors.text.primary, fontSize: typography.sizes.base, fontWeight: typography.weights.medium as any }}>
+                    Drzwi
+                  </Text>
+                  <Text style={{ color: colors.text.tertiary, fontSize: typography.sizes.sm }}>
+                    Dodaj drzwi do ściany
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => handleElementTypeSelect("window")}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: colors.background.tertiary,
+                  padding: spacing.md,
+                  borderRadius: borderRadius.lg,
+                }}
+              >
+                <LinearGradient
+                  colors={["#3B82F6", "#1D4ED8"]}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: borderRadius.md,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: spacing.md,
+                  }}
+                >
+                  <Square size={22} color="white" />
+                </LinearGradient>
+                <View>
+                  <Text style={{ color: colors.text.primary, fontSize: typography.sizes.base, fontWeight: typography.weights.medium as any }}>
+                    Okno
+                  </Text>
+                  <Text style={{ color: colors.text.tertiary, fontSize: typography.sizes.sm }}>
+                    Dodaj okno do ściany
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
         {/* Enhanced Element Modal */}
         <EnhancedDoorWindowModal
           visible={showElementModal && !isModalInitializing}
           elementType={elementType}
           availableWalls={availableWalls}
+          initialSelectedWall={activeWall}
+          initialElement={editingElement}
           onSave={handleSaveElement}
           onClose={handleCloseModal}
           onError={showError}
-          key={`modal-${elementType}-${showElementModal}`}
+          key={`modal-${elementType}-${showElementModal}-${editingElement?.id || 'new'}`}
         />
 
         {/* Custom Toast */}

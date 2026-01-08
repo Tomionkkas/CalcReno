@@ -5,13 +5,12 @@ import { Project } from "../../../utils/storage";
 export const exportCanvasToPNG = async (
   canvasRef: React.RefObject<View>,
   project: Project,
-  showError?: (title: string, message?: string) => void,
-  showSuccess?: (title: string, message?: string) => void
-) => {
+  showError?: (title: string, message?: string) => void
+): Promise<string | null> => {
   try {
     if (!canvasRef.current) {
       showError?.("Błąd eksportu", "Nie można uzyskać dostępu do canvas");
-      return;
+      return null;
     }
 
     const options = {
@@ -21,23 +20,15 @@ export const exportCanvasToPNG = async (
     };
 
     const uri = await captureRef(canvasRef, options);
-    
-    // Share the PNG
-    const Sharing = require('expo-sharing');
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(uri, {
-        UTI: '.png',
-        mimeType: 'image/png',
-      });
-    } else {
-      showSuccess?.("Sukces", `Plan zapisany w: ${uri}`);
-    }
+    return uri;
   } catch (error) {
     showError?.("Błąd eksportu", "Nie udało się wyeksportować planu do PNG");
+    return null;
   }
 };
 
 export const getCanvasFileName = (project: Project): string => {
+  const timestamp = new Date().getTime();
   const sanitizedName = project.name.replace(/[^a-zA-Z0-9]/g, '_');
-  return `${sanitizedName}_plan.png`;
+  return `${sanitizedName}_plan_${timestamp}.png`;
 };

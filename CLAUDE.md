@@ -89,9 +89,26 @@ See `app/utils/supabase.ts` for full type definitions and client configuration.
 **Room Rendering & L-Shape Support:**
 - Rectangle rooms: 4 walls with standard dimensions
 - L-shape rooms: 6 walls with corner orientation (top-left, top-right, bottom-left, bottom-right)
-- Corner orientation determines which quadrant is "cut out" from the rectangle
+- Corner orientation determines which quadrant has the extension
 - Wall calculations in `app/utils/shapeCalculations.ts`
-- Visual rendering in `app/components/ProjectPlanner/RoomShapes/`
+- Visual rendering:
+  - Room Editor: `app/components/ProfessionalRoomRenderer.tsx`
+  - Planner: `app/components/ProjectPlanner/DraggableRoom/DraggableRoom.tsx`
+  - PNG Export: `app/components/ProjectPlanner/utils/svgExportUtils.ts`
+
+**L-Shape Rendering with Y-Offset (for extension > main):**
+- When extension dimensions exceed main dimensions (e.g., main=2m×3m, ext=3m×2m)
+- Y-offset strategy applied to prevent negative SVG coordinates
+- For bottom corners: `yOffset = length2 > length ? length2 - length : 0`
+- All rendering coordinates shifted by yOffset to keep coordinates positive
+- Applies to: ProfessionalRoomRenderer, DraggableRoom, and svgExportUtils
+
+**Known Issues (Extension > Main):**
+- ⚠️ Planner visualization shows all corner orientations the same way (extension appears at bottom)
+- ⚠️ Some wall dimensions may show incorrect lengths due to coordinate system mismatch
+- ✅ Room Editor visualization works correctly (no clipping)
+- ✅ Labels clearly identify "Główne" (Main) vs "Rozszerzenie" (Extension)
+- Note: These edge cases will be addressed based on production user feedback
 
 **Animation Performance:**
 - Uses react-native-reanimated for smooth 60fps animations
@@ -109,6 +126,16 @@ See `app/utils/supabase.ts` for full type definitions and client configuration.
 - Registers tokens to `shared_schema.user_push_tokens`
 - Supports deep linking and notification actions
 - Real-time subscriptions for cross-app notifications
+
+**PNG Export:**
+- Uses `expo-media-library` to save directly to device Photo Gallery
+- Export functionality in `app/components/ProjectPlanner/utils/exportUtils.ts`
+- Export preview modal in `app/components/ProjectPlanner/components/ExportPreviewModal.tsx`
+- Supports both "Share" and "Download" actions
+- Permissions configured in `app.json`:
+  - iOS: `NSPhotoLibraryAddUsageDescription`
+  - Android: `WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`
+- Works in both Expo Go and production builds
 
 ## Common Patterns
 
@@ -142,6 +169,22 @@ const { data } = await sharedSupabase
 - Room details prepared in `project/[id].tsx` via `prepareRoomDetailsForCalculator`
 - Calculations in `app/components/ProjectSummary/utils/materialCalculations.ts`
 - Export utilities in `app/components/ProjectSummary/MaterialDetailsModal/utils/materialExportUtils.ts`
+
+### Room Editor & Planner
+**Room Editor** (`app/components/RoomEditor/`):
+- Modal-based room creation/editing interface
+- Live preview using `ProfessionalRoomRenderer`
+- Wall selection for door/window placement
+- Supports both rectangle and L-shape rooms
+- Corner selector for L-shapes: `app/components/RoomEditor/components/l-shape-corner-selector.tsx`
+
+**Project Planner** (`app/components/ProjectPlanner/`):
+- 2D canvas for room layout planning
+- Draggable rooms with snap-to-grid
+- Clean mode toggle for export-ready view
+- PNG export with preview modal
+- Grid system: 1 meter = 20 pixels (`METERS_TO_GRID` constant)
+- Room height calculation: `getRoomHeight` in `ProjectPlannerTab.tsx` uses `Math.max(mainHeight, extHeight)` for L-shapes
 
 ## Coding Standards (from .cursor/rules/)
 
@@ -186,6 +229,8 @@ const { data } = await sharedSupabase
 - If rooms don't update: Check `forceUpdate` state in ProjectDetailScreen
 - If auth fails: Verify Supabase env vars in `process.env.EXPO_PUBLIC_SUPABASE_*`
 - If migrations fail: Check `app/utils/migration.ts` for data format compatibility
+- If L-shape rendering has issues: Check Y-offset calculations in rendering files (see Known Issues above)
+- If PNG export fails: Verify `expo-media-library` permissions in `app.json`
 
 ## Cross-App Integration
 
